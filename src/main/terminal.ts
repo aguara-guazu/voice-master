@@ -1,5 +1,4 @@
 import { EventEmitter } from "node:events";
-import os from "node:os";
 import * as pty from "node-pty";
 import { Terminal as HeadlessTerminal } from "@xterm/headless";
 import { detectPrompt, looksLikeShellPrompt, scanOsc } from "./detect";
@@ -31,13 +30,12 @@ export interface TerminalOptions {
   title?: string;
 }
 
-// Silencio tras el cual se evalúa el buffer en busca de una pregunta pendiente.
-// Por debajo de ~250ms el output normal de un comando dispara falsos positivos.
+// Silence after which the buffer is checked for a pending question. Below about
+// 250 ms the normal output of a command triggers false positives.
 const QUIET_MS = 450;
 
-// Duración a partir de la cual el fin de una ejecución se considera un evento
-// que vale interrumpir a alguien. Por debajo de este umbral, terminar es lo
-// esperable y no aporta información.
+// Duration from which the end of a run counts as an event worth interrupting
+// someone for. Below this threshold, finishing is expected and carries no news.
 const LONG_TASK_MS = 15_000;
 
 export declare interface Terminal {
@@ -55,16 +53,16 @@ export class Terminal extends EventEmitter {
   readonly shell: string;
 
   /**
-   * Terminal de la sesión maestra. Queda fuera del alcance del servidor MCP y
-   * sus eventos no se escriben en el bus: es donde corre el agente que orquesta
-   * a las demás, de modo que exponerla lo dejaría actuando sobre sí mismo.
+   * The master session's terminal. It stays out of the MCP server's reach and its
+   * events are never written to the bus: this is where the agent orchestrating
+   * the others runs, so exposing it would leave it acting on itself.
    */
   readonly master: boolean;
 
   /**
-   * Directorio temporal creado por la aplicación para esta terminal. Se elimina
-   * al cerrarla. `null` cuando la terminal trabaja sobre un directorio del
-   * usuario, que nunca se toca.
+   * Throwaway directory created by the application for this terminal. Deleted on
+   * close. `null` when the terminal works on a user directory, which is never
+   * touched.
    */
   readonly temporaryDir: string | null;
 
@@ -74,20 +72,20 @@ export class Terminal extends EventEmitter {
   private lastPrompt: string | null = null;
   private runStartedAt: number | null = null;
 
-  // Se activa al recibir el primer marcador OSC 133: a partir de ahí el estado
-  // proviene del shell y deja de inferirse del output.
+  // Set on the first OSC 133 marker: from then on state comes from the shell and
+  // is no longer inferred from output.
   private integrated = false;
   private commandActive = false;
   private lastExitCode: number | null = null;
 
-  // La terminal recibió eventos de estado de un agente CLI. Ver handleNotification.
+  // The terminal received state events from a CLI agent. See handleNotification.
   private structuredSource = false;
 
-  // Momento de la última tecla del usuario. Arranca en cero para no bloquear un
-  // aviso automático en una terminal con la que nadie interactuó todavía.
+  // Timestamp of the user's last keystroke. Starts at zero so an automatic notice
+  // is not held back on a terminal nobody has touched yet.
   private lastUserInputAt = 0;
 
-  // El shell ya dibujó un prompt al menos una vez. Ver waitForPrompt().
+  // The shell has drawn a prompt at least once. See waitForPrompt().
   private promptSeen = false;
 
   private _status: TerminalStatus = "idle";
@@ -103,8 +101,8 @@ export class Terminal extends EventEmitter {
     this.master = options.master ?? false;
     this.temporaryDir = options.temporaryDir ?? null;
     this.shell = options.shell ?? process.env.SHELL ?? "/bin/zsh";
-    // El título se fija en el constructor y no despues: el evento de creación
-    // debe llevar ya el nombre definitivo para que la interfaz no lo corrija.
+    // The title is set in the constructor rather than afterwards: the creation
+    // event must already carry the final name so the interface need not fix it.
     this._title = options.title ?? options.cwd.split("/").filter(Boolean).pop() ?? this.shell;
 
     const cols = options.cols ?? 120;
@@ -122,8 +120,8 @@ export class Terminal extends EventEmitter {
       },
     });
 
-    // El espejo consume el mismo stream que el renderer, de modo que el estado
-    // de pantalla queda disponible en el proceso main sin depender de la ventana.
+    // The mirror consumes the same stream as the renderer, so screen state is
+    // available in the main process without depending on the window.
     this.mirror = new HeadlessTerminal({
       cols,
       rows,
@@ -180,8 +178,8 @@ export class Terminal extends EventEmitter {
       }
     }
 
-    // Sin marcadores del shell el estado solo puede inferirse del output. Es un
-    // respaldo: no distingue un comando lento y silencioso de una shell ociosa.
+    // Without shell markers, state can only be inferred from output. This is a
+    // fallback: it cannot tell a slow silent command from an idle shell.
     if (!this.integrated && marks.length === 0) {
       this.setStatus("running");
     }
@@ -201,9 +199,9 @@ export class Terminal extends EventEmitter {
 
     if (!payload) return;
 
-    // Un agente que informa su propio estado es autoritativo: a partir de aquí
-    // la heurística de pantalla sobra y solo aportaría falsos positivos, porque
-    // el cuadro de entrada de una TUI se parece a una pregunta pendiente.
+    // An agent reporting its own state is authoritative: from here the screen
+    // heuristic is redundant and would only add false positives, because a TUI's
+    // input box looks a lot like a pending question.
     this.structuredSource = true;
 
     switch (payload["event"]) {
@@ -222,7 +220,7 @@ export class Terminal extends EventEmitter {
     }
   }
 
-  /** Cuerpo JSON de una notificación de agente CLI; null si no lo es. */
+  /** JSON body of a CLI agent notification; null when it isn't one. */
   private parseAgentPayload(notification: OscNotification): Record<string, unknown> | null {
     if (!notification.title.startsWith("warp://cli-agent")) return null;
     try {
@@ -244,7 +242,7 @@ export class Terminal extends EventEmitter {
     this.quietTimer = null;
     if (this._status === "exited") return;
 
-    // Con un agente informando su estado, la pantalla no se interpreta.
+    // With an agent reporting its state, the screen is not interpreted.
     if (this.structuredSource) return;
 
     const tail = this.tail(8);
@@ -258,17 +256,17 @@ export class Terminal extends EventEmitter {
 
     const detection = detectPrompt(tail);
     if (!detection) {
-      // Con marcadores del shell, el paso a idle lo decide el fin del comando.
-      // El silencio por sí solo no significa que haya terminado: un proceso
-      // puede tardar minutos sin escribir nada.
+      // With shell markers, the move to idle is decided by the end of the
+      // command. Silence alone does not mean it finished: a process can take
+      // minutes without writing anything.
       if (!this.integrated && !this.commandActive) this.setStatus("idle");
       return;
     }
 
     this.setStatus("waiting");
 
-    // La misma pregunta permanece en pantalla mientras nadie responde; se
-    // notifica una sola vez por texto detectado.
+    // The same question stays on screen while nobody answers, so it is reported
+    // once per detected text.
     if (this.lastPrompt === detection.line) return;
     this.lastPrompt = detection.line;
     this.emitPrompt(detection);
@@ -297,13 +295,13 @@ export class Terminal extends EventEmitter {
 
     if (previous !== "running" || this.runStartedAt === null) return;
 
-    // El fin de una tarea lo marca el shell con 133;D. Pasar a "waiting" con un
-    // comando todavía en curso solo significa que ese comando espera una
-    // respuesta: la tarea no terminó y no corresponde anunciarla.
+    // The end of a task is marked by the shell with 133;D. Moving to "waiting"
+    // while a command is still in flight only means that command is awaiting an
+    // answer: the task has not finished and should not be announced.
     if (this.integrated && this.commandActive) return;
 
-    // Una ejecución que duró lo suficiente se reporta aparte del cambio de
-    // estado: es la señal que justifica avisar a alguien que no está mirando.
+    // A run that lasted long enough is reported separately from the state change:
+    // it is the signal that justifies notifying someone who isn't watching.
     const runMs = Date.now() - this.runStartedAt;
     this.runStartedAt = null;
     if (runMs < LONG_TASK_MS) return;
@@ -338,7 +336,7 @@ export class Terminal extends EventEmitter {
     this.emit("event", payload);
   }
 
-  /** Últimas `count` líneas no vacías del buffer visible más scrollback. */
+  /** Last `count` non-empty lines of the visible buffer plus scrollback. */
   tail(count: number): string[] {
     const lines = this.snapshot(count * 4);
     while (lines.length > 0 && (lines[lines.length - 1] ?? "").trim() === "") {
@@ -348,18 +346,20 @@ export class Terminal extends EventEmitter {
   }
 
   /**
-   * Lee el buffer del espejo.
+   * Reads the mirror's buffer.
    *
-   * El final del contenido no es `buffer.length`: ese valor incluye las filas
-   * vacías del viewport. En el buffer normal el contenido termina en el cursor
-   * (`baseY + cursorY`). En el buffer alternativo —una aplicación de pantalla
-   * completa— el cursor se mueve por toda la pantalla y hay contenido por
-   * debajo, así que se devuelve el viewport completo.
+   * The end of the content is not `buffer.length`: that value includes the empty
+   * rows of the viewport. In the normal buffer the content ends at the cursor
+   * (`baseY + cursorY`). In the alternate buffer — a full-screen application —
+   * the cursor moves all over the screen and there is content below it, so the
+   * whole viewport is returned.
    */
   snapshot(lines: number): string[] {
     const buffer = this.mirror.buffer.active;
     const alternate = buffer.type === "alternate";
-    const end = alternate ? buffer.length : Math.min(buffer.baseY + buffer.cursorY + 1, buffer.length);
+    const end = alternate
+      ? buffer.length
+      : Math.min(buffer.baseY + buffer.cursorY + 1, buffer.length);
     const from = Math.max(0, end - lines);
     const out: string[] = [];
 
@@ -373,18 +373,18 @@ export class Terminal extends EventEmitter {
 
   write(data: string): void {
     if (this._status === "exited") {
-      throw new Error(`la terminal ${this.id} ya terminó`);
+      throw new Error(`terminal ${this.id} has already exited`);
     }
     this.proc.write(data);
   }
 
   /**
-   * Espera a que el shell dibuje su primer prompt, momento a partir del cual
-   * acepta órdenes. Resuelve `false` si vence el plazo, lo que ocurre con shells
-   * que no emiten marcadores; en ese caso quien llama decide si escribir igual.
+   * Waits for the shell to draw its first prompt, the point from which it accepts
+   * commands. Resolves `false` on timeout, which happens with shells that emit no
+   * markers; the caller then decides whether to write anyway.
    *
-   * Un retraso fijo no serviría: la carga del perfil del usuario puede tardar
-   * bastante más que cualquier valor razonable de espera.
+   * A fixed delay would not do: loading the user's profile can take considerably
+   * longer than any reasonable wait.
    */
   waitForPrompt(timeoutMs: number): Promise<boolean> {
     if (this.promptSeen) return Promise.resolve(true);
@@ -402,8 +402,8 @@ export class Terminal extends EventEmitter {
   }
 
   /**
-   * Registra que la escritura vino del teclado del usuario. Permite a quien
-   * quiera escribir de forma automática esperar a que deje de teclear.
+   * Records that a write came from the user's keyboard. Lets anything writing
+   * automatically wait until they stop typing.
    */
   markUserInput(): void {
     this.lastUserInputAt = Date.now();
@@ -420,14 +420,14 @@ export class Terminal extends EventEmitter {
   }
 
   /**
-   * Nombre visible de la pestaña. Se normalizan los espacios y se recorta: el
-   * valor puede venir de un canal externo y se pinta en la interfaz, donde un
-   * salto de línea o un texto muy largo romperían la barra de pestañas.
+   * Visible name of the tab. Whitespace is collapsed and the text trimmed: the
+   * value can arrive from an external channel and is painted in the interface,
+   * where a newline or a very long string would break the tab bar.
    */
   setTitle(title: string): void {
     const clean = title.replace(/\s+/g, " ").trim().slice(0, 60);
     if (clean.length === 0) {
-      throw new Error("el nombre no puede quedar vacío");
+      throw new Error("the name cannot be empty");
     }
     this._title = clean;
   }
@@ -437,25 +437,24 @@ export class Terminal extends EventEmitter {
   }
 
   /**
-   * La terminal tiene una sesión de agente que informa su estado. Se deduce de
-   * haber recibido al menos una notificación estructurada.
+   * The terminal has an agent session reporting its state. Inferred from having
+   * received at least one structured notification.
    */
   get hasAgentSession(): boolean {
     return this.structuredSource;
   }
 
   /**
-   * Color de identificación de la pestaña. Se guarda aquí y no en la interfaz
-   * para que sobreviva a un recargado de la ventana. `null` la devuelve al
-   * aspecto por defecto.
+   * Identifying colour of the tab. Kept here rather than in the interface so it
+   * survives a window reload. `null` restores the default look.
    *
-   * Se acepta únicamente notación hexadecimal de seis dígitos: el valor termina
-   * interpolado en un estilo, y restringir el formato evita inyectar CSS
-   * arbitrario desde un canal externo.
+   * Only six-digit hexadecimal notation is accepted: the value ends up
+   * interpolated into a style, and restricting the format prevents injecting
+   * arbitrary CSS from an external channel.
    */
   setColor(color: string | null): void {
     if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) {
-      throw new Error(`color inválido: ${color}. Se espera #rrggbb o null`);
+      throw new Error(`invalid colour: ${color}. Expected #rrggbb or null`);
     }
     this._color = color;
   }
@@ -467,7 +466,7 @@ export class Terminal extends EventEmitter {
       try {
         this.proc.kill();
       } catch {
-        // El proceso puede haber muerto entre la comprobación y el kill.
+        // The process may have died between the check and the kill.
       }
     }
     this.mirror.dispose();

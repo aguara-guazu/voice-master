@@ -2,7 +2,7 @@
   "name": "voice-master",
   "version": "0.1.0",
   "private": true,
-  "description": "Terminal con pestañas expuesta por MCP",
+  "description": "Tabbed terminal orchestrated by an agent over MCP",
   "main": "dist/main/index.js",
   "scripts": {
     "build": "node build.mjs",

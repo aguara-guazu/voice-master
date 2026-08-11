@@ -1,8 +1,8 @@
 import { build } from "esbuild";
 import { cp, mkdir } from "node:fs/promises";
 
-// node-pty carga un .node nativo por require dinámico: debe quedar externo al bundle.
-// Electron y los módulos built-in también se resuelven en runtime.
+// node-pty loads a native .node through a dynamic require: it must stay external
+// to the bundle. Electron and built-in modules are resolved at runtime too.
 const mainExternals = ["electron", "node-pty"];
 
 const common = {

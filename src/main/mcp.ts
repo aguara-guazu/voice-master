@@ -5,8 +5,8 @@ import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod";
 import type { Registry } from "./registry";
 
-// El tipo de retorno se deja inferir: la unión de resultados del SDK discrimina
-// por el literal "text", que se ensancharía a string con una anotación propia.
+// The return type is left to inference: the SDK's result union discriminates on
+// the "text" literal, which a hand-written annotation would widen to string.
 function text(value: unknown) {
   const body = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return { content: [{ type: "text" as const, text: body }] };
@@ -19,9 +19,9 @@ function buildServer(registry: Registry): McpServer {
     "terminals_list",
     {
       description:
-        "Lista las terminales abiertas con su id, título, directorio y estado. " +
-        "El estado 'waiting' indica que la terminal espera una respuesta interactiva. " +
-        "No incluye la sesión maestra, que queda fuera de alcance por diseño.",
+        "Lists open terminals with their id, title, directory and state. The 'waiting' state " +
+        "means the terminal is expecting an interactive answer. Excludes the master session, " +
+        "which is out of reach by design.",
       inputSchema: z.object({}),
     },
     async () => text(registry.list()),
@@ -31,10 +31,10 @@ function buildServer(registry: Registry): McpServer {
     "terminal_read",
     {
       description:
-        "Devuelve las últimas líneas de una terminal, leídas del buffer de pantalla. " +
-        "Funciona igual sobre una shell normal que sobre una aplicación de pantalla completa.",
+        "Returns the last lines of a terminal, read from its screen buffer. Works the same on a " +
+        "plain shell as on a full-screen application.",
       inputSchema: z.object({
-        id: z.string().describe("Identificador de la terminal"),
+        id: z.string().describe("Terminal identifier"),
         lines: z.number().int().min(1).max(2000).default(60),
       }),
     },
@@ -53,35 +53,34 @@ function buildServer(registry: Registry): McpServer {
     "terminal_open",
     {
       description:
-        "Abre una terminal nueva y la deja lista en una sola llamada: directorio, nombre, " +
-        "color y comando inicial. Con 'cwd' trabaja sobre ese directorio; con 'temporary' en " +
-        "true se crea uno temporal que se borra al cerrar la pestaña. Hay que indicar uno de " +
-        "los dos.\n\n" +
-        "Usar 'run' para lanzar un agente (por ejemplo 'claude'): se espera a que el shell " +
-        "esté listo antes de escribirlo. Evita tener que encadenar terminal_label y " +
-        "terminal_write después de abrir.",
+        "Opens a new terminal and leaves it ready in a single call: directory, name, colour and " +
+        "initial command. With 'cwd' it works on that directory; with 'temporary' set to true a " +
+        "throwaway one is created and deleted when the tab closes. One of the two is required.\n\n" +
+        "Use 'run' to start an agent (for example 'claude'): the shell is given time to become " +
+        "ready before the command is written. Saves chaining terminal_label and terminal_write " +
+        "after opening.",
       inputSchema: z.object({
-        cwd: z.string().optional().describe("Directorio de trabajo, ruta absoluta"),
+        cwd: z.string().optional().describe("Working directory, absolute path"),
         temporary: z
           .boolean()
           .default(false)
-          .describe("Crea un directorio temporal en lugar de usar 'cwd'"),
+          .describe("Creates a throwaway directory instead of using 'cwd'"),
         title: z.string().optional(),
         color: z
           .string()
           .regex(/^#[0-9a-fA-F]{6}$/)
           .optional()
-          .describe("Color de identificación en formato #rrggbb"),
+          .describe("Identifying colour in #rrggbb form"),
         run: z
           .string()
           .optional()
-          .describe("Comando a ejecutar una vez que el shell esté listo, por ejemplo 'claude'"),
-        shell: z.string().optional().describe("Shell a ejecutar; por defecto la del usuario"),
+          .describe("Command to run once the shell is ready, for example 'claude'"),
+        shell: z.string().optional().describe("Shell to run; defaults to the user's"),
       }),
     },
     async ({ cwd, temporary, title, color, run, shell }) => {
       if (!temporary && !cwd) {
-        throw new Error("hay que indicar 'cwd' o poner 'temporary' en true");
+        throw new Error("either 'cwd' or 'temporary' set to true is required");
       }
 
       const dir = temporary ? await registry.createTempDir() : (cwd as string);
@@ -96,8 +95,8 @@ function buildServer(registry: Registry): McpServer {
 
       let ran = false;
       if (run) {
-        // Escribir antes de que el shell dibuje su prompt puede perder la orden,
-        // y la carga del perfil del usuario no tiene una duración previsible.
+        // Writing before the shell draws its prompt can lose the command, and
+        // loading the user's profile takes an unpredictable amount of time.
         await terminal.waitForPrompt(8000);
         terminal.write(`${run}\r`);
         ran = true;
@@ -119,13 +118,13 @@ function buildServer(registry: Registry): McpServer {
     "terminal_write",
     {
       description:
-        "Envía texto a una terminal. Requiere confirmación previa del usuario: no " +
-        "invocar por iniciativa propia. Con submit=true agrega un salto de línea. " +
-        "Para responder a un selector, usar las secuencias de flechas en 'text'.",
+        "Sends text to a terminal. Requires the user's prior confirmation: do not call on your " +
+        "own initiative. With submit=true a newline is appended. To answer a selector, send the " +
+        "arrow-key sequences in 'text'.",
       inputSchema: z.object({
         id: z.string(),
-        text: z.string().describe("Texto a escribir en el pty"),
-        submit: z.boolean().default(false).describe("Agrega \\r al final"),
+        text: z.string().describe("Text to write into the pty"),
+        submit: z.boolean().default(false).describe("Appends \\r at the end"),
       }),
     },
     async ({ id, text: payload, submit }) => {
@@ -139,22 +138,21 @@ function buildServer(registry: Registry): McpServer {
     "events_recent",
     {
       description:
-        "Eventos recientes de las pestañas, del más nuevo al más viejo. Tipos: " +
-        "'task-finished' (terminó una ejecución de 15 s o más, con duración y código de " +
-        "salida), 'prompt' (una terminal espera respuesta), 'notification' (una aplicación " +
-        "notificó; las sesiones de agente informan aquí su estado), 'exit' (murió el proceso) " +
-        "y 'status'. Es la forma de saber qué pasó sin sondear cada terminal. No incluye la " +
-        "sesión maestra.\n\n" +
-        "Por omisión se devuelve solo lo que amerita una decisión: quedan fuera los 'status' y " +
-        "las notificaciones de avance de un agente ('prompt_submit', 'tool_complete', " +
-        "'post_tool_use'), que llegan por decenas mientras trabaja. Para ver también esas, " +
-        "pedir explícitamente types: ['notification'].",
+        "Recent tab events, newest first. Types: 'task-finished' (a run of 15 s or more ended, " +
+        "with duration and exit code), 'prompt' (a terminal is awaiting an answer), " +
+        "'notification' (an application notified; agent sessions report their state here), " +
+        "'exit' (the process died) and 'status'. This is how to find out what happened without " +
+        "polling every terminal. Excludes the master session.\n\n" +
+        "By default only what warrants a decision is returned: 'status' events and agent progress " +
+        "notifications ('prompt_submit', 'tool_complete', 'post_tool_use') are left out, since " +
+        "they arrive by the dozen while an agent works. To see those too, ask explicitly for " +
+        "types: ['notification'].",
       inputSchema: z.object({
         limit: z.number().int().min(1).max(200).default(30),
         types: z
           .array(z.string())
           .optional()
-          .describe("Tipos a incluir sin filtro fino; si se omite, se devuelve solo lo accionable"),
+          .describe("Types to include without the fine filter; if omitted, only actionable ones"),
       }),
     },
     async ({ limit, types }) => {
@@ -167,13 +165,12 @@ function buildServer(registry: Registry): McpServer {
     "events_wait",
     {
       description:
-        "Se queda esperando hasta que ocurra algo que amerite una decisión —una tarea que " +
-        "termina, un agente que finaliza su turno o pide permiso, un proceso que muere— y lo " +
-        "devuelve. Si no pasa nada dentro del plazo devuelve una lista vacía, y conviene volver " +
-        "a llamar.\n\n" +
-        "Usar esta herramienta después de delegar una tarea, en lugar de consultar " +
-        "'events_recent' en bucle: la llamada no responde hasta que hay novedad, así que no se " +
-        "gasta nada mientras el otro agente trabaja. No incluye la sesión maestra.",
+        "Blocks until something worth deciding on happens — a task finishing, an agent ending " +
+        "its turn or asking for permission, a process dying — and returns it. If nothing happens " +
+        "within the deadline it returns an empty list, and calling again is the way to go.\n\n" +
+        "Use this after delegating a task, rather than polling 'events_recent' in a loop: the " +
+        "call doesn't answer until there is news, so nothing is spent while the other agent " +
+        "works. Excludes the master session.",
       inputSchema: z.object({
         timeout_seconds: z
           .number()
@@ -181,11 +178,11 @@ function buildServer(registry: Registry): McpServer {
           .min(1)
           .max(120)
           .default(60)
-          .describe("Cuánto esperar antes de devolver vacío"),
+          .describe("How long to wait before returning empty"),
         types: z
           .array(z.string())
           .optional()
-          .describe("Tipos a esperar; si se omite, se espera cualquier evento accionable"),
+          .describe("Types to wait for; if omitted, any actionable event"),
       }),
     },
     async ({ timeout_seconds, types }) => {
@@ -202,18 +199,18 @@ function buildServer(registry: Registry): McpServer {
     "terminal_label",
     {
       description:
-        "Cambia el nombre y/o el color de una pestaña. Sirve para organizar: por ejemplo, " +
-        "marcar en rojo la que falló o renombrar según la tarea que corre. Ambos campos son " +
-        "opcionales; el color se quita pasando null. No alcanza a la sesión maestra.",
+        "Changes a tab's name and/or colour. Meant for organising: marking the one that failed in " +
+        "red, or renaming it after the task it runs. Both fields are optional; passing null " +
+        "clears the colour. Does not reach the master session.",
       inputSchema: z.object({
         id: z.string(),
-        title: z.string().optional().describe("Nombre visible; se recorta a 60 caracteres"),
+        title: z.string().optional().describe("Visible name; trimmed to 60 characters"),
         color: z
           .string()
           .regex(/^#[0-9a-fA-F]{6}$/)
           .nullable()
           .optional()
-          .describe("Color en formato #rrggbb, o null para quitarlo"),
+          .describe("Colour in #rrggbb form, or null to clear it"),
       }),
     },
     async ({ id, title, color }) => {
@@ -228,7 +225,7 @@ function buildServer(registry: Registry): McpServer {
   server.registerTool(
     "terminal_close",
     {
-      description: "Cierra una terminal y termina su proceso.",
+      description: "Closes a terminal and ends its process.",
       inputSchema: z.object({ id: z.string() }),
     },
     async ({ id }) => {
@@ -248,11 +245,10 @@ export interface McpEndpoint {
 }
 
 /**
- * Publica el servidor MCP por HTTP en loopback.
+ * Publishes the MCP server over HTTP on loopback.
  *
- * El handler recibe una fábrica: se construye un McpServer por petición, así que
- * las herramientas cierran sobre el registro compartido en lugar de sobre estado
- * propio de una instancia.
+ * The handler takes a factory: one McpServer is built per request, so the tools
+ * close over the shared registry rather than over per-instance state.
  */
 export async function startMcpServer(
   registry: Registry,
@@ -264,10 +260,10 @@ export async function startMcpServer(
 
   const app = createMcpExpressApp();
 
-  // El secreto va en la ruta y no en una cabecera: hay defectos abiertos en los
-  // que el cliente no envía las cabeceras declaradas en `.mcp.json`, mientras que
-  // la URL viaja siempre. Cualquier otra ruta no existe, de modo que conocer el
-  // puerto no alcanza para usar el servidor.
+  // The secret goes in the path rather than a header: there are open defects
+  // where the client does not send the headers declared in `.mcp.json`, whereas
+  // the URL always travels. Any other path does not exist, so knowing the port is
+  // not enough to use the server.
   app.all(`/mcp/${token}`, (req, res) => void node(req, res, req.body));
 
   const server: Server = await new Promise((resolve, reject) => {

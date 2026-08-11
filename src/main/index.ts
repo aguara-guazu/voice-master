@@ -49,11 +49,11 @@ function wireRegistry(reg: Registry): void {
 }
 
 function registerIpc(reg: Registry): void {
-  // La interfaz ve todas las terminales; el servidor MCP usa reg.list().
+  // The interface sees every terminal; the MCP server uses reg.list().
   ipcMain.handle("terminals:list", () => reg.listAll());
 
   ipcMain.handle("terminals:create", (_event, options: { cwd?: string; title?: string }) => {
-    // allowMaster solo aquí: una terminal creada por MCP nunca puede ser maestra.
+    // allowMaster only here: a terminal created over MCP can never be the master.
     const terminal = reg.create({
       cwd: options.cwd ?? os.homedir(),
       title: options.title,
@@ -69,8 +69,8 @@ function registerIpc(reg: Registry): void {
     };
   });
 
-  // Esta ruta es el teclado del usuario: se marca para que los avisos
-  // automáticos no le mezclen texto mientras escribe.
+  // This route is the user's keyboard: it is marked so automatic notices do not
+  // mix text in while they type.
   ipcMain.handle("terminals:write", (_event, id: string, data: string) => {
     const terminal = reg.get(id);
     terminal.markUserInput();
@@ -81,19 +81,19 @@ function registerIpc(reg: Registry): void {
     reg.get(id).resize(cols, rows);
   });
 
-  // La maestra no se cierra: ahí corre la sesión que administra a las demás, y
-  // cerrarla deja la aplicación sin orquestador. Se oculta de la vista dividida
-  // en su lugar. Ocultar el botón en la interfaz no basta: este canal recibe el
-  // identificador y hay que rechazarlo aquí.
+  // The master is not closable: it runs the session administering the others, and
+  // closing it leaves the application without an orchestrator. It hides from the
+  // split view instead. Hiding the button in the interface is not enough: this
+  // channel receives the identifier and has to reject it here.
   ipcMain.handle("terminals:close", (_event, id: string) => {
     if (reg.get(id).master) {
-      throw new Error("la sesión maestra no se puede cerrar; se oculta de la vista dividida");
+      throw new Error("the master session cannot be closed; it hides from the split view");
     }
     reg.close(id);
   });
 
-  // La maestra también admite nombre y color: su distintivo es el marcador del
-  // título, no el tono.
+  // The master takes a name and colour like any other tab: its distinguishing
+  // mark is the title marker, not the hue.
   ipcMain.handle("terminals:setColor", (_event, id: string, color: string | null) => {
     reg.get(id).setColor(color);
     reg.notifyLabel(id);
@@ -125,13 +125,13 @@ function registerIpc(reg: Registry): void {
 void app.whenReady().then(async () => {
   const stateDir = app.getPath("userData");
 
-  // __dirname apunta a dist/main; los recursos viven dos niveles arriba.
+  // __dirname points at dist/main; resources live two levels up.
   try {
     masterDir = await prepareMasterSession(stateDir, path.join(__dirname, "..", ".."));
   } catch (error) {
-    // Sin el directorio de instrucciones la aplicación sigue siendo usable; la
-    // sesión maestra arranca en el home y se avisa por consola.
-    console.error("no se pudo preparar el directorio de la sesión maestra:", error);
+    // Without the instructions directory the application is still usable; the
+    // master session starts in the home directory and this is logged.
+    console.error("could not prepare the master session directory:", error);
   }
 
   registry = new Registry(stateDir);
@@ -140,18 +140,18 @@ void app.whenReady().then(async () => {
   registerIpc(registry);
   wireRegistry(registry);
 
-  // El servidor se levanta antes de abrir la ventana: la pestaña maestra se crea
-  // al cargar el renderer, y su sesión lee la configuración MCP al iniciarse.
-  // Secreto de acceso al servidor, nuevo en cada arranque. Solo queda escrito en
-  // la configuración del directorio de la sesión maestra, de modo que ninguna otra
-  // sesión ni proceso puede usar las herramientas de pestañas.
+  // Access secret for the server, new on every start. It is only written to the
+  // configuration of the master session's directory, so no other session or
+  // process can use the tab tools.
   const token = randomBytes(16).toString("hex");
 
+  // The server comes up before the window opens: the master tab is created when
+  // the renderer loads, and its session reads the MCP configuration at startup.
   try {
     mcp = await startMcpServer(registry, MCP_PORT, token);
     await writeMcpConfig(masterDir, mcp.url);
   } catch (error) {
-    console.error("no se pudo iniciar el servidor MCP:", error);
+    console.error("could not start the MCP server:", error);
   }
 
   window = createWindow();

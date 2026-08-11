@@ -91,9 +91,9 @@ body {
   background: var(--exited);
 }
 
-/* La maestra queda fuera del control externo y su identidad visual es fija: el
-   violeta está reservado y no se ofrece en la paleta, de modo que ninguna otra
-   pestaña puede parecerse a ella. */
+/* The master stays out of external control and its visual identity is fixed:
+   violet is reserved and never offered in the palette, so no other tab can end up
+   looking like it. */
 .tab.master {
   border-color: var(--master);
   background: rgba(187, 154, 247, 0.1);
@@ -107,7 +107,7 @@ body {
   box-shadow: 0 0 0 2px rgba(187, 154, 247, 0.3);
 }
 
-/* Color de identificación elegido por el usuario. No toca el punto de estado. */
+/* Identifying colour chosen by the user. Leaves the status dot alone. */
 .tab.tinted {
   border-color: var(--tab-color);
   background: color-mix(in srgb, var(--tab-color) 14%, transparent);
@@ -193,8 +193,8 @@ body {
   color: var(--text);
 }
 
-/* El control de la maestra refleja si está fijada: encendido cuando aparece en
-   vista dividida, atenuado cuando está oculta. */
+/* The master's control reflects whether it is pinned: lit when it shows in the
+   split view, dimmed when hidden. */
 .tab.master .hide {
   color: var(--master);
 }
@@ -238,8 +238,8 @@ body {
   flex-direction: column;
 }
 
-/* Los paneles son elementos flex: min-*: 0 evita que el contenido del terminal
-   imponga un tamaño mínimo y desborde el contenedor al arrastrar el divisor. */
+/* Panes are flex items: min-*: 0 stops the terminal contents from imposing a
+   minimum size and overflowing the container while dragging the divider. */
 .pane {
   display: none;
   min-width: 0;
@@ -270,7 +270,7 @@ body {
   cursor: row-resize;
 }
 
-/* Zona de agarre más ancha que la línea visible, sin desplazar el layout. */
+/* Grab area wider than the visible line, without shifting the layout. */
 #divider::after {
   content: "";
   position: absolute;

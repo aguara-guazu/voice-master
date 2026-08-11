@@ -1,82 +1,74 @@
-# AGENTS.md — instrucciones del workspace
+# AGENTS.md — workspace instructions
 
-Este archivo es la fuente de verdad del workspace. Cualquier agente que trabaje acá lo lee
-primero y vuelve a él ante cualquier duda de proceso.
+This file is the workspace's source of truth. Any agent working here reads it first and comes
+back to it whenever a process question comes up.
 
-## Orden de lectura al iniciar sesión
+## Reading order at the start of a session
 
-1. `AGENTS.md` (este archivo) — reglas y proceso.
-2. `notes.md` — estado real del proyecto: avances, decisiones, cambios en la base de código.
-3. `to-myself.md` — nota personal entre sesiones. Leerla siempre, actualizarla cuando corresponda.
-4. `findings/` — investigaciones previas. Consultar antes de reinvestigar algo.
+1. `AGENTS.md` (this file) — rules and process.
+2. `notes.md` — the project's real state: progress, decisions, changes to the codebase.
+3. `to-myself.md` — a personal note across sessions. Always read it, update it when warranted.
+4. `findings/` — earlier research. Check before investigating something again.
 
-## Estado del proyecto
+Only this file and `CLAUDE.md` are tracked in the repository. The other three are working
+material and stay out of it, so a fresh clone will not have them.
 
-Definición funcional del proyecto: **pendiente**. No asumir alcance, dominio ni stack: se
-define con el usuario y se registra en `notes.md`.
+## Process
 
-Fase actual: **investigación y evaluación de viabilidad**. Todavía no se codea.
+1. **Research** — survey options, technical constraints, limits, costs, licences.
+2. **Assess viability** — compare alternatives with explicit criteria and trade-offs.
+3. **Decide** — record the decision and its rationale in `notes.md`.
+4. **Build** — only once a decision is on record.
 
-El proyecto no está atado a un solo lenguaje ni a un solo stack. La elección de tecnología es
-una conclusión de la investigación, no un supuesto de partida.
-
-## Proceso
-
-1. **Investigar** — relevar opciones, restricciones técnicas, límites, costos, licencias.
-2. **Evaluar viabilidad** — comparar alternativas con criterios explícitos y tradeoffs.
-3. **Decidir** — dejar la decisión y su justificación en `notes.md`.
-4. **Codear** — recién cuando hay una decisión registrada.
-
-No saltar de la pregunta al código. Si falta información para decidir, preguntar.
+Don't jump from the question to the code. If information is missing to decide, ask.
 
 ## `findings/`
 
-Todo lo que se encuentra durante la investigación se escribe acá. Un archivo por tema.
+Everything turned up during research goes here. One file per topic.
 
-- Nombre: `AAAA-MM-DD-tema-en-kebab-case.md`.
-- Contenido: qué se investigó, qué se encontró, qué se descartó y por qué, qué queda abierto.
-- **Toda afirmación factual sobre el mundo externo va con enlace a la fuente** (precios,
-  límites de servicios, comportamiento de herramientas, benchmarks, normativa). Si no hay
-  fuente verificable, se dice explícitamente en lugar de afirmar.
-- Distinguir siempre: dato verificado con fuente / prueba hecha localmente / hipótesis.
-- Los findings no se reescriben para "quedar bien". Si algo se demostró falso, se corrige
-  dejando registro de la corrección.
+- Name: `YYYY-MM-DD-topic-in-kebab-case.md`.
+- Contents: what was investigated, what was found, what was ruled out and why, what is still open.
+- **Every factual claim about the outside world carries a link to its source** (prices, service
+  limits, tool behaviour, benchmarks, regulation). If there is no verifiable source, say so
+  instead of asserting.
+- Always distinguish: verified against a source / tested locally / hypothesis.
+- Findings are not rewritten to look good. If something turned out to be false, correct it and
+  leave the correction on record.
 
 ## `notes.md`
 
-Referencia de entrada que segundea a este archivo. Se actualiza **activamente durante la
-sesión y entre sesiones**.
+The entry-point reference, second only to this file. Updated **actively during and between
+sessions**.
 
-Va: tareas encaradas, implementaciones, cambios hechos en la base de código, decisiones
-tomadas, problemas abiertos y próximo paso. Entradas fechadas, de lo más reciente a lo más
-viejo. Concreto y verificable, sin claims.
+It holds: tasks taken on, implementations, changes made to the codebase, decisions taken, open
+problems and the next step. Dated entries, newest first. Concrete and verifiable, no claims.
 
 ## `to-myself.md`
 
-Nota personal del agente entre sesiones. Se lee al empezar y se actualiza a medida que el
-proyecto avanza.
+The agent's personal note across sessions. Read at the start, updated as the project moves.
 
-Contiene frases motivacionales cortas y notas breves de cómo viene el trabajo. Su función es
-recordar que, independientemente del estado de ánimo o de lo trabado que esté el problema, se
-avanza en positivo: **keep on keeping on 👍**.
+Short motivational lines and brief notes on how the work is going. Its purpose is to remember
+that regardless of mood or how stuck the problem is, progress is made in good spirits:
+**keep on keeping on 👍**.
 
-## Reglas de trabajo
+## Working rules
 
-- **Idioma**: español neutro en documentación y comunicación. Sin voseo ni calcos del inglés.
-  Los identificadores del código van en inglés.
-- **Sin claims**: nunca escribir "listo para producción", "resuelto", "N veces más rápido" ni
-  equivalentes sin evidencia concreta. Reportar lo que efectivamente se probó y cómo.
-- **Comentarios en código**: solo guía técnica útil para modificar o debuggear. Nada de
-  comentarios que describan lo obvio ni que narren cambios ("ahora arregla X").
-- **Comillas**: simples en Python, dobles en JavaScript/TypeScript.
-- **Tests**: no se escriben tests salvo pedido explícito del usuario.
-- **`.env`**: no se modifica nunca. Si hace falta una variable, se le avisa al usuario.
-- **Secretos**: no se piden, no se reproducen y no se escriben en código, notas ni findings.
-  Se referencian por nombre desde un gestor de secretos.
-- **Documentación**: los únicos markdown del workspace son `AGENTS.md`, `CLAUDE.md`,
-  `notes.md`, `to-myself.md` y los de `findings/`. No se generan informes, guías de uso ni
-  resúmenes adicionales.
-- **Preguntar antes de asumir**: si faltan objetivo, alcance o restricciones, o si hay más de
-  una interpretación razonable que cambiaría el trabajo, preguntar antes de desarrollar.
-- **Señalar los problemas**: si un plan tiene una falla seria, decirlo directo y ofrecer
-  alternativa con tradeoffs explícitos.
+- **Language**: everything in the repository — code, comments, error messages, interface,
+  instructions — is written in English. Conversation with the user, and the working material kept
+  out of the repository (`notes.md`, `to-myself.md`, `findings/`), stay in neutral Spanish.
+- **No claims**: never write "production ready", "solved", "N times faster" or the like without
+  concrete evidence. Report what was actually tested and how.
+- **Code comments**: only technical guidance useful for modifying or debugging. No comments that
+  describe the obvious or narrate changes ("now fixes X").
+- **Quotes**: single in Python, double in JavaScript/TypeScript.
+- **Tests**: no tests are written unless the user explicitly asks.
+- **`.env`**: never modified. If a variable is needed, tell the user.
+- **Secrets**: never requested, never reproduced, never written into code, notes or findings.
+  Reference them by name from a secrets manager.
+- **Documentation**: the only markdown in the workspace is `AGENTS.md`, `CLAUDE.md`, `notes.md`,
+  `to-myself.md` and the files under `findings/`. No reports, usage guides or extra summaries are
+  generated.
+- **Ask before assuming**: if the goal, scope or constraints are missing, or there is more than
+  one reasonable reading that would change the work, ask before building.
+- **Point at problems**: if a plan has a serious flaw, say so plainly and offer an alternative
+  with explicit trade-offs.

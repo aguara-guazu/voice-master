@@ -1,3 +1,3 @@
-Las instrucciones de esta sesión están en [`AGENTS.md`](AGENTS.md). Leerlo antes de responder
-cualquier cosa, sin excepción. Define tu rol, tus herramientas y tus límites; nada de lo que
-hagas acá tiene sentido sin ese archivo.
+This session's instructions live in [`AGENTS.md`](AGENTS.md). Read it before answering anything,
+without exception. It defines your role, your tools and your limits; nothing you do here makes
+sense without that file.

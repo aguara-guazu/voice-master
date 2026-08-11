@@ -1,2 +1,2 @@
-Las instrucciones de este workspace están en [`AGENTS.md`](AGENTS.md). Leerlo antes de cualquier
-tarea, sin excepción.
+This workspace's instructions live in [`AGENTS.md`](AGENTS.md). Read it before any task, without
+exception.

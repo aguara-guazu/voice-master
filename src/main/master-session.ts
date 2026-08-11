@@ -2,15 +2,15 @@ import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * Instala el directorio de trabajo de la sesión maestra y devuelve su ruta.
+ * Installs the master session's working directory and returns its path.
  *
- * Los archivos de instrucciones se copian desde los recursos de la aplicación en
- * cada arranque, sobrescribiendo lo que hubiera: son parte del programa, no
- * material del usuario, y una copia vieja dejaría a la sesión maestra operando
- * con reglas que ya no corresponden a las herramientas disponibles.
+ * The instruction files are copied from the application's resources on every
+ * start, overwriting whatever was there: they are part of the program, not the
+ * user's material, and a stale copy would leave the master session working from
+ * rules that no longer match the available tools.
  *
- * Se instala en el directorio de datos y no dentro de la aplicación para que la
- * sesión maestra trabaje sobre una ruta estable y escribible.
+ * It is installed under the data directory rather than inside the application so
+ * the master session works on a stable, writable path.
  */
 export async function prepareMasterSession(stateDir: string, appDir: string): Promise<string> {
   const target = path.join(stateDir, "master-session");
@@ -19,8 +19,8 @@ export async function prepareMasterSession(stateDir: string, appDir: string): Pr
   await mkdir(target, { recursive: true });
   await cp(source, target, { recursive: true, force: true });
 
-  // La ruta del registro de eventos depende de la plataforma y del usuario, así
-  // que las instrucciones la llevan como marcador y se resuelve al instalar.
+  // The event log path depends on the platform and the user, so the instructions
+  // carry it as a placeholder and it is resolved at install time.
   const instructions = path.join(target, "AGENTS.md");
   const eventLog = path.join(stateDir, "events.jsonl");
   const text = await readFile(instructions, "utf8");
@@ -30,14 +30,14 @@ export async function prepareMasterSession(stateDir: string, appDir: string): Pr
 }
 
 /**
- * Declara el servidor MCP en el directorio de la sesión maestra.
+ * Declares the MCP server in the master session's directory.
  *
- * Sin esto, la sesión lee unas instrucciones que describen herramientas de las
- * que no dispone. Se escribe con la URL efectiva y no con una fija porque el
- * puerto es configurable y puede resolverse a otro si el previsto está ocupado.
+ * Without this the session reads instructions describing tools it does not have.
+ * The effective URL is written rather than a fixed one because the port is
+ * configurable and may resolve to another if the intended one is taken.
  *
- * Debe ejecutarse antes de abrir la pestaña maestra: el archivo se lee al
- * iniciar la sesión, no durante ella.
+ * Must run before the master tab opens: the file is read when the session starts,
+ * not during it.
  */
 export async function writeMcpConfig(masterDir: string, url: string): Promise<void> {
   const config = {
@@ -51,9 +51,8 @@ export async function writeMcpConfig(masterDir: string, url: string): Promise<vo
 
   await writeFile(path.join(masterDir, ".mcp.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
 
-  // Permisos de proyecto para que la sesión maestra disponga de las herramientas
-  // sin aprobaciones manuales. Solo aplican en este directorio: ninguna otra
-  // sesión los hereda.
+  // Project permissions so the master session has the tools without manual
+  // approvals. They apply to this directory only: no other session inherits them.
   const settings = {
     enableAllProjectMcpServers: true,
     permissions: {

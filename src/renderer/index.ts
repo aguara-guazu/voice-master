@@ -25,25 +25,25 @@ const THEME = {
   selectionBackground: "#2f3444",
 };
 
-// El violeta (#bb9af7) queda reservado a la sesión maestra y no se ofrece aquí:
-// si otra pestaña pudiera tomarlo, el color dejaría de identificarla.
+// Violet (#bb9af7) is reserved for the master session and not offered here: if
+// another tab could take it, the colour would stop identifying it.
 const PALETTE: Array<{ name: string; value: string }> = [
-  { name: "rojo", value: "#f7768e" },
-  { name: "naranja", value: "#ff9e64" },
-  { name: "amarillo", value: "#e0af68" },
-  { name: "verde", value: "#9ece6a" },
-  { name: "cian", value: "#7dcfff" },
-  { name: "azul", value: "#7aa2f7" },
-  { name: "gris", value: "#565f89" },
-  { name: "rosa", value: "#ff75a0" },
+  { name: "red", value: "#f7768e" },
+  { name: "orange", value: "#ff9e64" },
+  { name: "yellow", value: "#e0af68" },
+  { name: "green", value: "#9ece6a" },
+  { name: "cyan", value: "#7dcfff" },
+  { name: "blue", value: "#7aa2f7" },
+  { name: "grey", value: "#565f89" },
+  { name: "pink", value: "#ff75a0" },
 ];
 
 const panes = new Map<string, Pane>();
 let active: string | null = null;
 let colorMenu: HTMLElement | null = null;
 
-// Vista dividida: con la maestra fijada, moverse a otra pestaña la muestra junto
-// a ella en lugar de reemplazarla.
+// Split view: with the master pinned, moving to another tab shows it alongside
+// rather than replacing it.
 let pinned = true;
 let orientation: "columns" | "rows" = "columns";
 let masterRatio = 0.5;
@@ -51,8 +51,8 @@ let masterRatio = 0.5;
 const MIN_RATIO = 0.15;
 const MAX_RATIO = 0.85;
 
-// El color identifica la pestaña; el punto de estado conserva su propio color
-// para no perder la señal de qué está haciendo la terminal.
+// The colour identifies the tab; the status dot keeps its own colour so the
+// signal of what the terminal is doing is not lost.
 function applyLabel(pane: Pane, title: string, color: string | null): void {
   pane.title = title;
   const label = pane.tab.querySelector(".label") as HTMLElement;
@@ -98,11 +98,11 @@ function showTabMenu(pane: Pane, x: number, y: number): void {
   });
   menu.append(input);
 
-  // La maestra no admite color propio: el violeta reservado es su identidad.
+  // The master takes no colour of its own: the reserved violet is its identity.
   if (pane.master) {
     const note = document.createElement("div");
     note.className = "menu-note";
-    note.textContent = "Sesión maestra: color fijo";
+    note.textContent = "Master session: fixed colour";
     menu.append(note);
     document.body.append(menu);
     colorMenu = menu;
@@ -130,7 +130,7 @@ function showTabMenu(pane: Pane, x: number, y: number): void {
   const clear = document.createElement("button");
   clear.className = "swatch clear";
   clear.textContent = "×";
-  clear.title = "Sin color";
+  clear.title = "No colour";
   clear.addEventListener("click", () => {
     void window.vm.setColor(id, null);
     closeColorMenu();
@@ -155,8 +155,8 @@ const pinEl = document.getElementById("toggle-pin") as HTMLButtonElement;
 const orientationEl = document.getElementById("toggle-orientation") as HTMLButtonElement;
 const notifyEl = document.getElementById("toggle-notify") as HTMLButtonElement;
 
-// El estado de fijación se cambia desde dos sitios —el botón de la barra y el de
-// la propia pestaña maestra—, así que ambos pasan por aquí.
+// The pinned state is changed from two places — the toolbar button and the one on
+// the master tab itself — so both go through here.
 function setPinned(value: boolean): void {
   pinned = value;
   pinEl.classList.toggle("on", pinned);
@@ -210,12 +210,12 @@ function createPane(summary: { id: string; title: string; cwd: string; master?: 
   tab.className = summary.master ? "tab master" : "tab";
   tab.dataset["status"] = "idle";
   tab.title = summary.master
-    ? `${summary.cwd}\nSesión maestra: fuera del alcance del control externo`
+    ? `${summary.cwd}\nMaster session: out of reach of external control`
     : summary.cwd;
-  // La maestra no se cierra: en lugar del botón de cierre lleva uno que la
-  // oculta de la vista dividida.
+  // The master is not closable: instead of a close button it carries one that
+  // hides it from the split view.
   tab.innerHTML = summary.master
-    ? `<span class="dot"></span><span class="label"></span><span class="hide" title="Ocultar de la vista dividida">◆</span>`
+    ? `<span class="dot"></span><span class="label"></span><span class="hide" title="Hide from split view">◆</span>`
     : `<span class="dot"></span><span class="label"></span><span class="close">×</span>`;
   (tab.querySelector(".label") as HTMLElement).textContent = summary.master
     ? `◆ ${summary.title}`
@@ -258,7 +258,7 @@ function createPane(summary: { id: string; title: string; cwd: string; master?: 
 
   term.onData((data) => void window.vm.write(summary.id, data));
 
-  // El pty se dimensiona desde el renderer: es quien conoce el tamaño real.
+  // The pty is sized from the renderer: it is the one that knows the real size.
   term.onResize(({ cols, rows }) => void window.vm.resize(summary.id, cols, rows));
 
   const pane: Pane = {
@@ -275,8 +275,8 @@ function createPane(summary: { id: string; title: string; cwd: string; master?: 
     event.preventDefault();
     event.stopPropagation();
     const rect = tab.getBoundingClientRect();
-    // Se ancla a la pestaña, acotado al ancho de la ventana para que el menú no
-    // quede cortado en la primera ni en la última.
+    // Anchored to the tab, clamped to the window width so the menu is not cut off
+    // on the first or the last one.
     const left = Math.min(rect.left, window.innerWidth - 210);
     showTabMenu(pane, Math.max(8, left), rect.bottom + 4);
   });
@@ -290,8 +290,8 @@ function masterPane(): Pane | undefined {
 }
 
 /**
- * Decide qué paneles se ven y en qué proporción. Con la maestra fijada y el foco
- * en otra pestaña se muestran ambos; estando en la maestra, ella ocupa todo.
+ * Decides which panes are visible and in what proportion. With the master pinned
+ * and focus on another tab both are shown; while on the master, it takes it all.
  */
 function layout(): void {
   const master = masterPane();
@@ -313,7 +313,7 @@ function layout(): void {
       continue;
     }
 
-    // El divisor tiene orden 2: la maestra queda antes y la seguidora después.
+    // The divider has order 2: the master sits before and the follower after.
     const share = pane.master ? masterRatio : 1 - masterRatio;
     pane.host.style.flex = `${share} 1 0`;
     pane.host.style.order = pane.master ? "1" : "3";
@@ -326,8 +326,8 @@ function layout(): void {
   refit();
 }
 
-// xterm no se redimensiona solo: hay que recalcular filas y columnas después de
-// cada cambio de disposición.
+// xterm does not resize itself: rows and columns must be recomputed after every
+// layout change.
 function refit(): void {
   requestAnimationFrame(() => {
     for (const pane of panes.values()) {
@@ -390,9 +390,9 @@ window.vm.onEvent((payload) => {
   }
 });
 
-// Terminales creadas desde el servidor MCP: la ventana no las pidió, así que
-// tiene que construir su panel al enterarse. El guard cubre las que sí abrió
-// ella, cuyo panel ya existe cuando llega este evento.
+// Terminals created from the MCP server: the window did not ask for them, so it
+// has to build their pane on hearing about it. The guard covers the ones it did
+// open, whose pane already exists when this event arrives.
 window.vm.onCreated((summary) => {
   if (panes.has(summary.id)) return;
   const pane = createPane(summary);
@@ -421,10 +421,10 @@ void (async () => {
   const info = await window.vm.info();
   homeDir = info.home;
   notifyEl.classList.toggle("on", info.notify);
-  // Solo el puerto: la URL lleva el secreto de acceso y no debe quedar a la vista.
+  // Port only: the URL carries the access secret and must not be on display.
   if (info.mcpUrl) statusEl.textContent = `MCP :${new URL(info.mcpUrl).port}`;
 
-  // La primera pestaña abierta desde la ventana queda como maestra, y arranca en
-  // el directorio con sus instrucciones.
-  await openTerminal(info.masterDir, "maestra");
+  // The first tab opened from the window becomes the master, and starts in the
+  // directory holding its instructions.
+  await openTerminal(info.masterDir, "master");
 })();

@@ -2,11 +2,14 @@ import { EventEmitter } from "node:events";
 import { appendFile, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Terminal } from "./terminal";
+import type { TerminalEvent, TerminalOptions } from "./terminal";
+import { CLI_AGENT_ENV, prepareShellIntegration } from "./shell-integration";
 
 const TEMP_PREFIX = "voice-master-";
 
-// Eventos que una sesión de agente emite como parte de su avance normal. No
-// piden ninguna decisión y llegan por decenas mientras trabaja.
+// Events an agent session emits as part of its normal progress. None of them
+// calls for a decision and they arrive by the dozen while it works.
 const AGENT_PROGRESS = new Set(["prompt_submit", "tool_complete", "post_tool_use"]);
 
 function isAgentProgress(event: TerminalEvent): boolean {
@@ -14,9 +17,6 @@ function isAgentProgress(event: TerminalEvent): boolean {
   const payload = event.detail["payload"] as Record<string, unknown> | undefined;
   return typeof payload?.["event"] === "string" && AGENT_PROGRESS.has(payload["event"]);
 }
-import { Terminal } from "./terminal";
-import type { TerminalEvent, TerminalOptions } from "./terminal";
-import { CLI_AGENT_ENV, prepareShellIntegration } from "./shell-integration";
 
 export interface TerminalSummary {
   id: string;
@@ -31,11 +31,11 @@ export interface TerminalSummary {
 }
 
 /**
- * Registro de terminales vivas y bus de eventos.
+ * Registry of live terminals and event bus.
  *
- * Los eventos se escriben además a un archivo JSONL append-only: es el canal
- * que un proceso externo puede seguir sin mantener una conexión abierta contra
- * el servidor MCP, que solo responde a peticiones.
+ * Events are also written to an append-only JSONL file: that is the channel an
+ * external process can follow without holding a connection open against the MCP
+ * server, which only answers requests.
  */
 export class Registry extends EventEmitter {
   private terminals = new Map<string, Terminal>();
@@ -44,9 +44,9 @@ export class Registry extends EventEmitter {
   private stateDir: string;
   private baseEnv: Record<string, string> = { ...CLI_AGENT_ENV };
 
-  // El archivo de eventos se conserva entre arranques, pero los identificadores
-  // de terminal se reinician. Sin este corte, una consulta devolvería eventos de
-  // pestañas de sesiones anteriores que ya no existen.
+  // The event file is kept across runs, but terminal identifiers restart. Without
+  // this cut-off a query would return events from tabs of previous sessions that
+  // no longer exist.
   private startedAt: string;
 
   constructor(stateDir: string) {
@@ -57,9 +57,8 @@ export class Registry extends EventEmitter {
   }
 
   /**
-   * Prepara la integración de shell. Debe ejecutarse antes de crear terminales:
-   * sin ella el estado se infiere del output y un comando lento y silencioso
-   * pasa por inactivo.
+   * Prepares shell integration. Must run before creating terminals: without it
+   * state is inferred from output and a slow, silent command passes for idle.
    */
   async init(shell = process.env["SHELL"] ?? "/bin/zsh"): Promise<void> {
     const integration = await prepareShellIntegration(this.stateDir, shell);
@@ -73,23 +72,21 @@ export class Registry extends EventEmitter {
     return this.eventLog;
   }
 
-  /** Hay una terminal maestra viva. */
+  /** Whether a live master terminal exists. */
   hasMaster(): boolean {
     return [...this.terminals.values()].some((t) => t.master);
   }
 
   /**
-   * `allowMaster` distingue el origen: solo las terminales abiertas desde la
-   * ventana pueden quedar marcadas como maestras. Mientras no exista ninguna, la
-   * primera que se abra desde la interfaz lo será, de modo que cerrarla no deja
-   * a la aplicación sin sesión maestra de forma permanente.
+   * `allowMaster` distinguishes the origin: only terminals opened from the window
+   * can end up marked as master. While none exists, the next one opened from the
+   * interface becomes it, so closing it does not leave the application without a
+   * master session for good.
    */
-  create(
-    options: Omit<TerminalOptions, "id"> & { id?: string; allowMaster?: boolean },
-  ): Terminal {
+  create(options: Omit<TerminalOptions, "id"> & { id?: string; allowMaster?: boolean }): Terminal {
     const id = options.id ?? `t${++this.counter}`;
     if (this.terminals.has(id)) {
-      throw new Error(`ya existe una terminal con id ${id}`);
+      throw new Error(`a terminal with id ${id} already exists`);
     }
 
     const master = options.master ?? (options.allowMaster === true && !this.hasMaster());
@@ -103,9 +100,10 @@ export class Registry extends EventEmitter {
     this.terminals.set(id, terminal);
 
     terminal.on("event", (payload: TerminalEvent) => {
-      // La maestra no escribe en el bus: ahí corre la conversación con el agente
-      // que vigila el archivo, y sus eventos de fin de turno arrastran consulta
-      // y respuesta. Sí se emiten en memoria para que la interfaz pinte estado.
+      // The master does not write to the bus: that is where the conversation with
+      // the agent watching this file happens, and its end-of-turn events carry the
+      // query and the answer. They are still emitted in memory so the interface
+      // can paint state.
       if (!terminal.master) void this.record(payload);
       this.emit("event", payload);
     });
@@ -121,7 +119,7 @@ export class Registry extends EventEmitter {
   get(id: string): Terminal {
     const terminal = this.terminals.get(id);
     if (!terminal) {
-      throw new Error(`no existe la terminal ${id}`);
+      throw new Error(`terminal ${id} does not exist`);
     }
     return terminal;
   }
@@ -130,68 +128,65 @@ export class Registry extends EventEmitter {
     return this.terminals.has(id);
   }
 
-  /** Devuelve la terminal o undefined, sin lanzar. */
+  /** Returns the terminal or undefined, without throwing. */
   peek(id: string): Terminal | undefined {
     return this.terminals.get(id);
   }
 
-  /** La terminal maestra viva, si existe. */
+  /** The live master terminal, if any. */
   master(): Terminal | undefined {
     return [...this.terminals.values()].find((t) => t.master);
   }
 
-  /** Terminales expuestas al control externo. Excluye la maestra. */
+  /** Terminals exposed to external control. Excludes the master. */
   list(): TerminalSummary[] {
-    return [...this.terminals.values()]
-      .filter((t) => !t.master)
-      .map((t) => this.summarize(t));
+    return [...this.terminals.values()].filter((t) => !t.master).map((t) => this.summarize(t));
   }
 
-  /** Todas las terminales, incluida la maestra. Solo para la interfaz. */
+  /** Every terminal, master included. For the interface only. */
   listAll(): TerminalSummary[] {
     return [...this.terminals.values()].map((t) => this.summarize(t));
   }
 
   /**
-   * Acceso restringido al control externo. Rechaza la terminal maestra por su
-   * identificador: ocultarla del listado no alcanza, porque los identificadores
-   * son correlativos y se adivinan al primer intento.
+   * Access restricted to external control. Rejects the master terminal by its
+   * identifier: hiding it from the listing is not enough, because identifiers are
+   * sequential and guessed on the first try.
    */
   getControllable(id: string): Terminal {
     const terminal = this.get(id);
     if (terminal.master) {
-      throw new Error(`la terminal ${id} es la sesión maestra y no admite control externo`);
+      throw new Error(`terminal ${id} is the master session and takes no external control`);
     }
     return terminal;
   }
 
-  /** Propaga a la interfaz un cambio de nombre o color, venga de donde venga. */
+  /** Propagates a name or colour change to the interface, wherever it came from. */
   notifyLabel(id: string): void {
     this.emit("label", this.summarize(this.get(id)));
   }
 
   /**
-   * Crea un directorio temporal para una sesión que no debe dejar rastro. Se
-   * elimina al cerrar la terminal.
+   * Creates a throwaway directory for a session that should leave no trace. It is
+   * deleted when the terminal closes.
    *
-   * El nombre incluye el pid del proceso para poder distinguir, en un arranque
-   * posterior, los directorios abandonados de los que pertenecen a otra
-   * instancia en marcha.
+   * The name includes the process pid so that, on a later run, abandoned
+   * directories can be told apart from those belonging to another live instance.
    */
   async createTempDir(): Promise<string> {
     return mkdtemp(path.join(tmpdir(), `${TEMP_PREFIX}${process.pid}-`));
   }
 
   /**
-   * Elimina directorios temporales de instancias que ya no existen.
+   * Removes throwaway directories from instances that no longer exist.
    *
-   * Ni macOS ni Windows garantizan el borrado del directorio temporal al apagar
-   * el equipo: la limpieza del sistema es por antigüedad o por programación. Si
-   * la aplicación termina de forma anormal, sus directorios quedan sin borrar y
-   * nadie los reclama, de modo que conviene barrerlos al arrancar.
+   * Neither macOS nor Windows guarantees clearing the temp directory on shutdown:
+   * system cleanup runs by age or on a schedule. If the application terminates
+   * abnormally its directories are left behind and nobody claims them, so they are
+   * swept at startup.
    *
-   * Solo se borran aquellos cuyo pid ya no está vivo, para no interferir con otra
-   * instancia en ejecución.
+   * Only those whose pid is no longer alive are removed, so another running
+   * instance is left alone.
    */
   private async sweepOrphanTempDirs(): Promise<void> {
     const base = tmpdir();
@@ -208,9 +203,9 @@ export class Registry extends EventEmitter {
       const pid = Number.parseInt(entry.slice(TEMP_PREFIX.length).split("-")[0] ?? "", 10);
       if (Number.isNaN(pid)) continue;
 
-      // Señal 0: comprueba la existencia del proceso sin afectarlo. Solo ESRCH
-      // significa que no existe; EPERM indica que está vivo y pertenece a otro
-      // usuario, caso en el que su directorio no debe tocarse.
+      // Signal 0 checks the process exists without affecting it. Only ESRCH means
+      // it does not; EPERM means it is alive and owned by another user, in which
+      // case its directory must not be touched.
       let abandoned = false;
       try {
         process.kill(pid, 0);
@@ -241,14 +236,14 @@ export class Registry extends EventEmitter {
   }
 
   /**
-   * Borra un directorio temporal creado por la aplicación. Comprueba el prefijo
-   * antes de borrar: la ruta llega desde el estado de una terminal y un borrado
-   * recursivo sobre un directorio del usuario sería irreversible.
+   * Deletes a throwaway directory created by the application. The prefix is
+   * checked first: the path comes from a terminal's state and a recursive delete
+   * over a user directory would be irreversible.
    */
   private async removeTempDir(dir: string): Promise<void> {
     const expected = path.join(tmpdir(), TEMP_PREFIX);
     if (!dir.startsWith(expected)) {
-      this.emit("log-error", new Error(`se omitió borrar un directorio ajeno: ${dir}`));
+      this.emit("log-error", new Error(`skipped deleting a foreign directory: ${dir}`));
       return;
     }
     try {
@@ -273,18 +268,17 @@ export class Registry extends EventEmitter {
   }
 
   /**
-   * Últimos eventos registrados, del más nuevo al más viejo. Se lee del archivo
-   * y no de memoria para no mantener un historial creciendo sin límite en el
-   * proceso; el archivo ya es el registro.
+   * Most recent events, newest first. Read from the file rather than from memory
+   * so no ever-growing history is kept in the process; the file is already the
+   * record.
    *
-   * Por omisión se descartan los eventos que no ameritan una decisión: los
-   * `status` y las notificaciones de progreso de una sesión de agente. Una sesión
-   * activa emite una notificación por cada llamada a herramienta, de modo que sin
-   * este filtro una consulta de treinta eventos se llena de ruido y deja fuera lo
-   * que había que ver.
+   * By default, events that do not warrant a decision are dropped: `status` ones
+   * and progress notifications from an agent session. An active session emits one
+   * notification per tool call, so without this filter a thirty-event query fills
+   * with noise and leaves out what needed to be seen.
    *
-   * Pidiendo un tipo explícito en `types` se devuelve todo lo de ese tipo, sin el
-   * filtro fino.
+   * Asking for an explicit type in `types` returns everything of that type,
+   * without the fine filter.
    */
   async recentEvents(limit: number, types?: string[]): Promise<TerminalEvent[]> {
     let raw: string;
@@ -324,15 +318,14 @@ export class Registry extends EventEmitter {
   }
 
   /**
-   * Espera a que ocurra un evento que amerite una decisión y lo devuelve. Si no
-   * ocurre nada dentro del plazo, devuelve una lista vacía.
+   * Waits for an event worth deciding on and returns it. If nothing happens
+   * within the deadline, returns an empty list.
    *
-   * Existe porque el protocolo no permite despertar a un cliente: una sesión que
-   * quiera enterarse de algo tiene que preguntar. Bloqueando aquí, quien delega
-   * una tarea puede quedarse esperando su final en una sola llamada, en lugar de
-   * consultar en bucle.
+   * It exists because the protocol cannot wake a client: a session that wants to
+   * learn about something has to ask. By blocking here, whoever delegates a task
+   * can wait for its end in a single call instead of polling.
    *
-   * Los eventos de la terminal maestra no se reportan, igual que en el registro.
+   * Master terminal events are not reported, as in the record.
    */
   async waitForEvent(timeoutMs: number, types?: string[]): Promise<TerminalEvent[]> {
     const wanted = types && types.length > 0 ? new Set(types) : null;

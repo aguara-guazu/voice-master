@@ -4,7 +4,7 @@ dist/
 *.log
 .DS_Store
 
-# Bitácora e investigación: material de trabajo, no del repositorio.
+# Working notes and research: working material, not part of the repository.
 findings/
 notes.md
 to-myself.md

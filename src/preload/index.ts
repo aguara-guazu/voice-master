@@ -57,8 +57,8 @@ const api = {
     ipcRenderer.on("terminal:event", (_e: IpcRendererEvent, payload: unknown) => handler(payload));
   },
 
-  // Una terminal puede nacer desde la ventana o desde el servidor MCP. Este
-  // evento es la única vía por la que la interfaz se entera de las segundas.
+  // A terminal can be born from the window or from the MCP server. This event
+  // is the only way the interface learns about the latter.
   onCreated: (handler: (summary: TerminalSummary) => void): void => {
     ipcRenderer.on("terminal:created", (_e: IpcRendererEvent, summary: TerminalSummary) =>
       handler(summary),
@@ -73,8 +73,8 @@ const api = {
     ipcRenderer.on("app:mcp-ready", (_e: IpcRendererEvent, url: string) => handler(url));
   },
 
-  // Un cambio de nombre o color puede venir de la ventana o del servidor MCP;
-  // ambos llegan por aquí para que la interfaz sea el reflejo de un solo estado.
+  // A name or colour change can come from the window or from the MCP server;
+  // both arrive here so the interface reflects a single source of state.
   onLabel: (handler: (summary: TerminalSummary) => void): void => {
     ipcRenderer.on("terminal:label", (_e: IpcRendererEvent, summary: TerminalSummary) =>
       handler(summary),

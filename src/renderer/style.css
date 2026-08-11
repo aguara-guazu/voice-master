@@ -1,0 +1,314 @@
+:root {
+  --bg: #12131a;
+  --bar: #1b1d27;
+  --edge: #2a2d3a;
+  --text: #d6d9e4;
+  --muted: #7e8496;
+  --accent: #7aa2f7;
+  --waiting: #e0af68;
+  --exited: #f7768e;
+  --master: #bb9af7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  overflow: hidden;
+}
+
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 12px 0 84px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--edge);
+  -webkit-app-region: drag;
+}
+
+#tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+
+#tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.tab:hover {
+  background: #22252f;
+}
+
+.tab.active {
+  background: #262a36;
+  border-color: var(--edge);
+  color: var(--text);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+.tab[data-status="running"] .dot {
+  background: var(--accent);
+}
+
+.tab[data-status="waiting"] .dot {
+  background: var(--waiting);
+  box-shadow: 0 0 0 3px rgba(224, 175, 104, 0.22);
+}
+
+.tab[data-status="exited"] .dot {
+  background: var(--exited);
+}
+
+/* La maestra queda fuera del control externo y su identidad visual es fija: el
+   violeta está reservado y no se ofrece en la paleta, de modo que ninguna otra
+   pestaña puede parecerse a ella. */
+.tab.master {
+  border-color: var(--master);
+  background: rgba(187, 154, 247, 0.1);
+}
+
+.tab.master .label {
+  color: var(--master);
+}
+
+.tab.master .dot {
+  box-shadow: 0 0 0 2px rgba(187, 154, 247, 0.3);
+}
+
+/* Color de identificación elegido por el usuario. No toca el punto de estado. */
+.tab.tinted {
+  border-color: var(--tab-color);
+  background: color-mix(in srgb, var(--tab-color) 14%, transparent);
+}
+
+.tab.tinted .label {
+  color: var(--tab-color);
+}
+
+.tab-menu {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px;
+  width: 202px;
+  background: #232631;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.tab-menu .rename {
+  width: 100%;
+  padding: 5px 7px;
+  background: #1b1d27;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.tab-menu .rename:focus {
+  border-color: var(--accent);
+}
+
+.tab-menu .menu-note {
+  color: var(--master);
+  font-size: 11px;
+  text-align: center;
+}
+
+.tab-menu .swatches {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.swatch {
+  width: 17px;
+  height: 17px;
+  border: none;
+  border-radius: 50%;
+  cursor: default;
+  padding: 0;
+}
+
+.swatch:hover {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.swatch.clear {
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tab .close,
+.tab .hide {
+  color: var(--muted);
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.tab .close:hover,
+.tab .hide:hover {
+  background: #363a49;
+  color: var(--text);
+}
+
+/* El control de la maestra refleja si está fijada: encendido cuando aparece en
+   vista dividida, atenuado cuando está oculta. */
+.tab.master .hide {
+  color: var(--master);
+}
+
+.tab.master.unpinned .hide {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+#new-tab {
+  -webkit-app-region: no-drag;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: default;
+}
+
+#new-tab:hover {
+  background: #262a36;
+  color: var(--text);
+}
+
+#status {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  -webkit-app-region: no-drag;
+}
+
+#panes {
+  display: flex;
+  height: calc(100% - 44px);
+}
+
+#panes[data-orientation="rows"] {
+  flex-direction: column;
+}
+
+/* Los paneles son elementos flex: min-*: 0 evita que el contenido del terminal
+   imponga un tamaño mínimo y desborde el contenedor al arrastrar el divisor. */
+.pane {
+  display: none;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+}
+
+.pane.visible {
+  display: block;
+}
+
+#divider {
+  display: none;
+  order: 2;
+  flex: none;
+  background: var(--edge);
+  position: relative;
+}
+
+#panes[data-orientation="columns"] > #divider {
+  width: 1px;
+  cursor: col-resize;
+}
+
+#panes[data-orientation="rows"] > #divider {
+  height: 1px;
+  cursor: row-resize;
+}
+
+/* Zona de agarre más ancha que la línea visible, sin desplazar el layout. */
+#divider::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+#divider:hover {
+  background: var(--accent);
+}
+
+body.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+#layout-controls {
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+#layout-controls button {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: default;
+}
+
+#layout-controls button:hover {
+  background: #262a36;
+  color: var(--text);
+}
+
+#layout-controls button.on {
+  border-color: var(--master);
+  color: var(--master);
+}

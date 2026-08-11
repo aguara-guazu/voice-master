@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+*.log
+.DS_Store
+
+# Bitácora e investigación: material de trabajo, no del repositorio.
+findings/
+notes.md
+to-myself.md

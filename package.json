@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fugood/whisper.node": "^1.1.1",
     "@modelcontextprotocol/express": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
@@ -21,6 +22,7 @@
     "@xterm/xterm": "^6.0.0",
     "express": "^5.1.0",
     "node-pty": "^1.1.0",
+    "sherpa-onnx-node": "^1.13.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -30,5 +32,10 @@
     "electron": "^43.3.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.0"
+  },
+  "allowScripts": {
+    "@fugood/whisper.node@1.1.1": true,
+    "esbuild@0.25.12": true,
+    "node-pty@1.1.0": true
   }
 }

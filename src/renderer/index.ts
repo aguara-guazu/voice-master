@@ -1,6 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { VoiceMasterApi } from "../preload/index";
+import { startVoiceCapture, stopVoiceCapture } from "./voice-capture";
 
 declare global {
   interface Window {
@@ -154,6 +155,7 @@ const dividerEl = document.getElementById("divider") as HTMLElement;
 const pinEl = document.getElementById("toggle-pin") as HTMLButtonElement;
 const orientationEl = document.getElementById("toggle-orientation") as HTMLButtonElement;
 const notifyEl = document.getElementById("toggle-notify") as HTMLButtonElement;
+const voiceEl = document.getElementById("toggle-voice") as HTMLButtonElement;
 
 // The pinned state is changed from two places — the toolbar button and the one on
 // the master tab itself — so both go through here.
@@ -173,6 +175,51 @@ notifyEl.addEventListener("click", () => {
     const enabled = await window.vm.setNotify(!notifyEl.classList.contains("on"));
     notifyEl.classList.toggle("on", enabled);
   })();
+});
+
+// Mic permission is requested before the (much heavier) local models are
+// loaded in the main process: no point paying that cost if access is denied.
+// Called from the toolbar button and at startup, where the microphone comes up
+// with the application.
+async function setVoiceOn(on: boolean): Promise<void> {
+  if (on) {
+    try {
+      await startVoiceCapture();
+    } catch (error) {
+      console.error("voice: could not access the microphone", error);
+      return;
+    }
+    const enabled = await window.vm.setVoiceEnabled(true);
+    if (!enabled) {
+      stopVoiceCapture();
+      return;
+    }
+    voiceEl.classList.add("on");
+  } else {
+    await window.vm.setVoiceEnabled(false);
+    stopVoiceCapture();
+    voiceEl.classList.remove("on", "recording");
+  }
+}
+
+voiceEl.addEventListener("click", () => void setVoiceOn(!voiceEl.classList.contains("on")));
+
+window.vm.onVoiceState((state) => {
+  voiceEl.classList.toggle("recording", state === "recording" || state === "transcribing");
+  // "idle" means listening actually ended — the button was clicked off or the
+  // pipeline broke — not a pause between utterances.
+  if (state === "idle") {
+    stopVoiceCapture();
+    voiceEl.classList.remove("on", "recording");
+  }
+});
+
+// The main process fires this when the master agent finishes its boot turn:
+// its instructions are read and its watcher is mounted, so speech now has
+// somewhere to go. Starting capture earlier would transcribe into a channel
+// nobody reads yet.
+window.vm.onVoiceAutostart(() => {
+  if (!voiceEl.classList.contains("on")) void setVoiceOn(true);
 });
 
 orientationEl.addEventListener("click", () => {
@@ -421,6 +468,8 @@ void (async () => {
   const info = await window.vm.info();
   homeDir = info.home;
   notifyEl.classList.toggle("on", info.notify);
+  voiceEl.classList.toggle("on", info.voiceEnabled);
+  if (info.voiceEnabled) void startVoiceCapture();
   // Port only: the URL carries the access secret and must not be on display.
   if (info.mcpUrl) statusEl.textContent = `MCP :${new URL(info.mcpUrl).port}`;
 

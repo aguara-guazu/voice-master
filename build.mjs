@@ -1,9 +1,10 @@
 import { build } from "esbuild";
 import { cp, mkdir } from "node:fs/promises";
 
-// node-pty loads a native .node through a dynamic require: it must stay external
-// to the bundle. Electron and built-in modules are resolved at runtime too.
-const mainExternals = ["electron", "node-pty"];
+// node-pty, sherpa-onnx-node and @fugood/whisper.node all load a native .node
+// through a dynamic require/import: they must stay external to the bundle.
+// Electron and built-in modules are resolved at runtime too.
+const mainExternals = ["electron", "node-pty", "sherpa-onnx-node", "@fugood/whisper.node"];
 
 const common = {
   bundle: true,
@@ -37,6 +38,17 @@ await build({
   ...common,
   entryPoints: ["src/renderer/index.ts"],
   outfile: "dist/renderer/index.js",
+  platform: "browser",
+  format: "iife",
+  target: "chrome130",
+});
+
+// Loaded via audioContext.audioWorklet.addModule(): a worklet runs in its own
+// global scope and cannot be part of the main renderer bundle.
+await build({
+  ...common,
+  entryPoints: ["src/renderer/voice-worklet.ts"],
+  outfile: "dist/renderer/voice-worklet.js",
   platform: "browser",
   format: "iife",
   target: "chrome130",

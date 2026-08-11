@@ -85,6 +85,11 @@ export class Terminal extends EventEmitter {
   // is not held back on a terminal nobody has touched yet.
   private lastUserInputAt = 0;
 
+  // When the status last changed. Lets automatic writers require the state to
+  // have settled: a TUI is still redrawing in the instant its turn ends, and
+  // text written right then can be swallowed before the input line exists.
+  private lastStatusChangeAt = Date.now();
+
   // The shell has drawn a prompt at least once. See waitForPrompt().
   private promptSeen = false;
 
@@ -169,6 +174,11 @@ export class Terminal extends EventEmitter {
         this.commandActive = false;
         this.lastExitCode = mark.exitCode;
         this.lastPrompt = null;
+        // The agent lives in the foreground command: when that command ends, its
+        // session is gone and state goes back to being inferred from the screen.
+        // Without this reset, hasAgentSession stays true on a bare shell and
+        // automatic writers would type into the command interpreter.
+        this.structuredSource = false;
         this.setStatus("idle");
 
         if (!this.promptSeen) {
@@ -205,6 +215,14 @@ export class Terminal extends EventEmitter {
     this.structuredSource = true;
 
     switch (payload["event"]) {
+      // The agent command is interactive: the shell's "command start" marker set
+      // the status to "running" and no marker will clear it until the agent
+      // exits. A session that just came up is waiting for input, not running —
+      // without this, anything gated on the status (voice writes, automatic
+      // notices) stays blocked until the first turn ends.
+      case "session_start":
+        this.setStatus("idle");
+        break;
       case "prompt_submit":
       case "post_tool_use":
         this.setStatus("running");
@@ -286,6 +304,7 @@ export class Terminal extends EventEmitter {
 
     const previous = this._status;
     this._status = next;
+    this.lastStatusChangeAt = Date.now();
     this.emitEvent("status", { status: next });
 
     if (next === "running") {
@@ -411,6 +430,10 @@ export class Terminal extends EventEmitter {
 
   msSinceUserInput(): number {
     return Date.now() - this.lastUserInputAt;
+  }
+
+  msSinceStatusChange(): number {
+    return Date.now() - this.lastStatusChangeAt;
   }
 
   resize(cols: number, rows: number): void {

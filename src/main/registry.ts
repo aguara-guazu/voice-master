@@ -65,6 +65,13 @@ export class Registry extends EventEmitter {
     if (integration) {
       this.baseEnv = { ...this.baseEnv, ...integration.env };
     }
+    // The master session tails this file from its first turn; appending nothing
+    // creates it ahead of the watcher without touching existing content.
+    try {
+      await appendFile(this.eventLog, "", "utf8");
+    } catch (error) {
+      this.emit("log-error", error);
+    }
     await this.sweepOrphanTempDirs();
   }
 

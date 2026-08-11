@@ -1,21 +1,32 @@
 import { randomBytes } from "node:crypto";
+import { appendFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { Registry } from "./registry";
 import { prepareMasterSession, writeMcpConfig } from "./master-session";
 import { MasterNotifier } from "./notifier";
+import { VoiceController } from "./voice";
+import type { VoiceState } from "./voice";
 import { startMcpServer } from "./mcp";
 import type { McpEndpoint } from "./mcp";
-import type { TerminalEvent } from "./terminal";
+import type { Terminal, TerminalEvent } from "./terminal";
 
 const MCP_PORT = Number(process.env.VOICE_MASTER_MCP_PORT ?? 7317);
+
+// First message of the master agent's session. Passed as a CLI argument so no
+// keystrokes need injecting into a TUI whose readiness cannot be observed.
+// Single-quoted for the shell: nothing in it may expand or need escaping.
+const MASTER_BOOT_PROMPT =
+  "Session start: read AGENTS.md in this directory and follow it now - " +
+  "set up your watcher first, then tell the user in one line that you are ready.";
 
 let window: BrowserWindow | null = null;
 let registry: Registry | null = null;
 let mcp: McpEndpoint | null = null;
 let masterDir: string = os.homedir();
 let notifier: MasterNotifier | null = null;
+let voice: VoiceController | null = null;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -48,6 +59,48 @@ function wireRegistry(reg: Registry): void {
   reg.on("label", (summary: unknown) => send("terminal:label", summary));
 }
 
+/**
+ * Starts the agent in the master tab as soon as its shell draws a prompt, same
+ * wait as terminal_open's `run`: writing earlier loses the command, and loading
+ * the user's profile has no predictable duration. On timeout (a shell without
+ * integration markers) it writes anyway.
+ */
+function autostartMasterAgent(terminal: Terminal): void {
+  void terminal.waitForPrompt(8000).then(() => {
+    try {
+      terminal.write(`claude '${MASTER_BOOT_PROMPT}'\r`);
+    } catch (error) {
+      console.error("could not start the master agent:", error);
+    }
+  });
+}
+
+function wireVoice(controller: VoiceController): void {
+  controller.on("state", (state: VoiceState) => {
+    console.log(`voice: state -> ${state}`); // TEMPORARY, see voice.ts's logAudioLevel note
+    send("voice:state", state);
+  });
+}
+
+/**
+ * Fires the microphone exactly when the master agent finishes its boot turn:
+ * by then it has read its instructions and mounted the watcher on the voice
+ * channel, so speech has somewhere to go. Capturing earlier would transcribe
+ * into a file nobody reads yet.
+ */
+function armVoiceAutostart(reg: Registry): void {
+  const onEvent = (event: TerminalEvent): void => {
+    if (event.type !== "notification") return;
+    const payload = event.detail["payload"] as Record<string, unknown> | undefined;
+    const kind = payload?.["event"];
+    if (kind !== "stop" && kind !== "stop_failure") return;
+    if (!reg.peek(event.terminalId)?.master) return;
+    reg.off("event", onEvent);
+    send("voice:autostart");
+  };
+  reg.on("event", onEvent);
+}
+
 function registerIpc(reg: Registry): void {
   // The interface sees every terminal; the MCP server uses reg.list().
   ipcMain.handle("terminals:list", () => reg.listAll());
@@ -59,6 +112,9 @@ function registerIpc(reg: Registry): void {
       title: options.title,
       allowMaster: true,
     });
+    // The master session is not usable until its agent runs, so it comes up on
+    // its own instead of waiting for the user to type the command by hand.
+    if (terminal.master) autostartMasterAgent(terminal);
     return {
       id: terminal.id,
       title: terminal.title,
@@ -70,14 +126,17 @@ function registerIpc(reg: Registry): void {
   });
 
   // This route is the user's keyboard: it is marked so automatic notices do not
-  // mix text in while they type.
+  // mix text in while they type. During shutdown the registry empties while the
+  // renderer is still alive, so a trailing keystroke is dropped, not an error.
   ipcMain.handle("terminals:write", (_event, id: string, data: string) => {
+    if (quitting) return;
     const terminal = reg.get(id);
     terminal.markUserInput();
     terminal.write(data);
   });
 
   ipcMain.handle("terminals:resize", (_event, id: string, cols: number, rows: number) => {
+    if (quitting) return;
     reg.get(id).resize(cols, rows);
   });
 
@@ -119,7 +178,18 @@ function registerIpc(reg: Registry): void {
     home: os.homedir(),
     masterDir,
     notify: notifier?.isEnabled ?? false,
+    voiceEnabled: voice?.enabled ?? false,
   }));
+
+  ipcMain.handle("voice:set-enabled", async (_event, enabled: boolean) => {
+    return (await voice?.setEnabled(enabled)) ?? false;
+  });
+
+  // Fire-and-forget: acking each chunk would be pure overhead at several
+  // messages a second, and there is nothing useful to return.
+  ipcMain.on("voice:audio-chunk", (_event, buffer: ArrayBuffer) => {
+    voice?.pushAudio(new Int16Array(buffer));
+  });
 }
 
 void app.whenReady().then(async () => {
@@ -137,8 +207,22 @@ void app.whenReady().then(async () => {
   registry = new Registry(stateDir);
   await registry.init();
   notifier = new MasterNotifier(registry);
+
+  // The master session tails this file; appending nothing creates it ahead of
+  // the watcher without touching existing content.
+  const voiceLog = path.join(stateDir, "voice.jsonl");
+  try {
+    await appendFile(voiceLog, "", "utf8");
+  } catch (error) {
+    console.error("could not create the voice channel file:", error);
+  }
+
+  voice = new VoiceController(voiceLog, path.join(__dirname, "..", "..", "resources", "voice"));
+  voice.preload();
   registerIpc(registry);
   wireRegistry(registry);
+  wireVoice(voice);
+  armVoiceAutostart(registry);
 
   // Access secret for the server, new on every start. It is only written to the
   // configuration of the master session's directory, so no other session or
@@ -170,7 +254,19 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
-  registry?.disposeAll();
-  void mcp?.close();
+// Whisper's Metal backend aborts the process at exit (a native assertion in
+// its own cleanup code) unless its context is released first. That release
+// is async, so quitting has to wait for it rather than fire-and-forget it:
+// preventDefault holds the quit open until cleanup settles, then quits again.
+let quitting = false;
+
+app.on("before-quit", (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  quitting = true;
+  void (async () => {
+    registry?.disposeAll();
+    await Promise.allSettled([mcp?.close(), voice?.dispose()]);
+    app.quit();
+  })();
 });

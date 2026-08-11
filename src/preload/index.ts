@@ -42,10 +42,28 @@ const api = {
     home: string;
     masterDir: string;
     notify: boolean;
+    voiceEnabled: boolean;
   }> => ipcRenderer.invoke("app:info"),
 
   setNotify: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke("app:set-notify", enabled),
+
+  setVoiceEnabled: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke("voice:set-enabled", enabled),
+
+  // Fire-and-forget: chunks arrive several times a second, an ack per chunk
+  // would be pure overhead.
+  sendAudioChunk: (buffer: ArrayBuffer): void => ipcRenderer.send("voice:audio-chunk", buffer),
+
+  onVoiceState: (handler: (state: string) => void): void => {
+    ipcRenderer.on("voice:state", (_e: IpcRendererEvent, state: string) => handler(state));
+  },
+
+  // Fired once, when the master agent finishes its boot turn: the moment from
+  // which spoken input has somewhere to go.
+  onVoiceAutostart: (handler: () => void): void => {
+    ipcRenderer.on("voice:autostart", () => handler());
+  },
 
   onData: (handler: (id: string, chunk: string) => void): void => {
     ipcRenderer.on("terminal:data", (_e: IpcRendererEvent, id: string, chunk: string) =>

@@ -10,6 +10,10 @@ const BATCH_MS = 1500;
 // would mangle their text.
 const USER_QUIET_MS = 4000;
 
+// The status must have settled this long before writing: right at the end of a
+// turn the TUI is still redrawing and swallows text written into it.
+const STATUS_SETTLE_MS = 1500;
+
 // Retry delay when the master is busy or the user has just typed.
 const RETRY_MS = 2000;
 
@@ -91,7 +95,11 @@ export class MasterNotifier {
     // Do not interrupt the master while it works, nor clobber what the user is
     // typing. Both cases retry later: a notice may arrive late, but it must not
     // corrupt the session.
-    if (master.status === "running" || master.msSinceUserInput() < USER_QUIET_MS) {
+    if (
+      master.status === "running" ||
+      master.msSinceStatusChange() < STATUS_SETTLE_MS ||
+      master.msSinceUserInput() < USER_QUIET_MS
+    ) {
       this.timer = setTimeout(() => this.flush(), RETRY_MS);
       return;
     }

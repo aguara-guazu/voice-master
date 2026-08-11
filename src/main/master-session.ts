@@ -19,12 +19,17 @@ export async function prepareMasterSession(stateDir: string, appDir: string): Pr
   await mkdir(target, { recursive: true });
   await cp(source, target, { recursive: true, force: true });
 
-  // The event log path depends on the platform and the user, so the instructions
-  // carry it as a placeholder and it is resolved at install time.
+  // The log paths depend on the platform and the user, so the instructions
+  // carry them as placeholders resolved at install time.
   const instructions = path.join(target, "AGENTS.md");
   const eventLog = path.join(stateDir, "events.jsonl");
+  const voiceLog = path.join(stateDir, "voice.jsonl");
   const text = await readFile(instructions, "utf8");
-  await writeFile(instructions, text.replaceAll("{{EVENT_LOG}}", eventLog), "utf8");
+  await writeFile(
+    instructions,
+    text.replaceAll("{{EVENT_LOG}}", eventLog).replaceAll("{{VOICE_LOG}}", voiceLog),
+    "utf8",
+  );
 
   return target;
 }

@@ -1,6 +1,9 @@
 node_modules/
 dist/
 
+# Voice models: fetched by hand, too large for version control. See notes.md.
+resources/voice/
+
 *.log
 .DS_Store
 

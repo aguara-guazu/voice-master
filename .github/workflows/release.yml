@@ -29,7 +29,13 @@ jobs:
           - os: macos-latest
             name: mac-arm64
             args: --mac
-          - os: macos-13
+          # macos-15-intel, not macos-13: the macOS 13 images were fully
+          # retired on 2025-12-08, and a job requesting them sits queued
+          # forever instead of failing. This label is the migration path for
+          # x86_64 and is planned as the last Intel image, supported until
+          # August 2027.
+          # https://github.blog/changelog/2025-09-19-github-actions-macos-13-runner-image-is-closing-down/
+          - os: macos-15-intel
             name: mac-x64
             args: --mac
           - os: windows-latest

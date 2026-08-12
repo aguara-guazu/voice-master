@@ -1,0 +1,91 @@
+name: Release
+
+# Builds every platform on its own runner and attaches the artifacts to the
+# tag's release.
+#
+# One runner per architecture, not per platform: node-pty is compiled from
+# source by electron-rebuild, and sherpa-onnx and whisper resolve a prebuilt
+# binary per platform and architecture. Cross-building would package native
+# code for the wrong machine, so each artifact comes off a runner of its own
+# architecture. That is why macOS takes two runners and why win/linux arm64
+# are not built.
+#
+# No architecture is declared anywhere: the build targets in package.json list
+# no arch and no --arch flag is passed, so each runner produces its own. An
+# earlier version pinned both macOS architectures in the config, and the x64
+# bundle came out carrying the arm64 sherpa-onnx binary — the host's optional
+# dependency, since npm only installs the one matching the machine.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: mac-arm64
+            args: --mac
+          - os: macos-13
+            name: mac-x64
+            args: --mac
+          - os: windows-latest
+            name: win-x64
+            args: --win
+          - os: ubuntu-latest
+            name: linux-x64
+            args: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # postinstall runs electron-rebuild for node-pty against this runner's
+      # Electron and architecture.
+      - run: npm install
+
+      # The models are ~616 MB and out of version control, so the runner has
+      # to fetch them. They are verified by digest and bundled as
+      # extraResources, which is what makes the installer self-contained.
+      - run: npm run models
+
+      - run: npm run typecheck
+      - run: npm run build
+
+      - run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          # No signing identity in CI. macOS bundles are re-sealed ad-hoc by
+          # after-pack.cjs; everything ships unsigned.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.zip
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - run: ls -R artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          fail_on_unmatched_files: true

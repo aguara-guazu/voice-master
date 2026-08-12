@@ -223,9 +223,16 @@ function registerIpc(reg: Registry): void {
 void app.whenReady().then(async () => {
   const stateDir = app.getPath("userData");
 
-  // __dirname points at dist/main; resources live two levels up.
+  // In development __dirname points at dist/main and resources live two levels
+  // up. In a packaged application they are shipped as extraResources — outside
+  // the asar, since the model files are opened by native code that needs real
+  // paths on disk — and process.resourcesPath is where they land.
+  const resourcesDir = app.isPackaged
+    ? process.resourcesPath
+    : path.join(__dirname, "..", "..", "resources");
+
   try {
-    masterDir = await prepareMasterSession(stateDir, path.join(__dirname, "..", ".."));
+    masterDir = await prepareMasterSession(stateDir, resourcesDir);
   } catch (error) {
     // Without the instructions directory the application is still usable; the
     // master session starts in the home directory and this is logged.
@@ -245,7 +252,7 @@ void app.whenReady().then(async () => {
     console.error("could not create the voice channel file:", error);
   }
 
-  const modelsDir = path.join(__dirname, "..", "..", "resources", "voice");
+  const modelsDir = path.join(resourcesDir, "voice");
   voice = new VoiceController(voiceLog, modelsDir);
   voice.preload();
   speech = new SpeechController(modelsDir);

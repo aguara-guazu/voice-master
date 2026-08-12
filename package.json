@@ -3,13 +3,76 @@
   "version": "0.1.0",
   "private": true,
   "description": "Tabbed terminal orchestrated by an agent over MCP",
+  "author": {
+    "name": "Luciano Serra",
+    "email": "noreply@github.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/aguara-guazu/voice-master",
   "main": "dist/main/index.js",
   "scripts": {
     "build": "node build.mjs",
     "start": "npm run build && electron .",
+    "models": "node scripts/fetch-models.mjs",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dist": "npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never"
+  },
+  "build": {
+    "appId": "app.voice-master.local",
+    "productName": "Voice Master",
+    "electronVersion": "43.3.0",
+    "afterPack": "./after-pack.cjs",
+    "artifactName": "${productName}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/voice",
+        "to": "voice"
+      },
+      {
+        "from": "resources/master-session",
+        "to": "master-session"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Voice Master listens to your voice so you can talk to the master session instead of typing."
+      }
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "artifactName": "${productName}-Setup-${arch}.${ext}"
+    },
+    "linux": {
+      "category": "Development",
+      "synopsis": "Tabbed terminal you talk to, orchestrated by an agent over MCP",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
   },
   "dependencies": {
     "@fugood/whisper.node": "^1.1.1",
@@ -30,6 +93,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.0"
   },

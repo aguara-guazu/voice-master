@@ -1,5 +1,6 @@
 node_modules/
 dist/
+release/
 
 # Voice models: fetched by hand, too large for version control. See notes.md.
 resources/voice/

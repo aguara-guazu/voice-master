@@ -12,9 +12,9 @@ import path from "node:path";
  * It is installed under the data directory rather than inside the application so
  * the master session works on a stable, writable path.
  */
-export async function prepareMasterSession(stateDir: string, appDir: string): Promise<string> {
+export async function prepareMasterSession(stateDir: string, resourcesDir: string): Promise<string> {
   const target = path.join(stateDir, "master-session");
-  const source = path.join(appDir, "resources", "master-session");
+  const source = path.join(resourcesDir, "master-session");
 
   await mkdir(target, { recursive: true });
   await cp(source, target, { recursive: true, force: true });

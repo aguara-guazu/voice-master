@@ -18,7 +18,7 @@ The applications are **not signed**, so each system asks for a confirmation the 
 **macOS** (Apple Silicon — Intel Macs are not supported) — paste in a terminal:
 
 ```bash
-curl -fL https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice%20Master-arm64.dmg -o /tmp/VoiceMaster.dmg && open /tmp/VoiceMaster.dmg
+curl -fL https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice.Master-arm64.dmg -o /tmp/VoiceMaster.dmg && open /tmp/VoiceMaster.dmg
 ```
 
 Drag **Voice Master** to Applications and open it.
@@ -26,7 +26,7 @@ Drag **Voice Master** to Applications and open it.
 **Windows** — paste in PowerShell:
 
 ```powershell
-irm https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice%20Master-Setup-x64.exe -OutFile "$env:TEMP\VoiceMaster-Setup.exe"; & "$env:TEMP\VoiceMaster-Setup.exe"
+irm https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice.Master-Setup-x64.exe -OutFile "$env:TEMP\VoiceMaster-Setup.exe"; & "$env:TEMP\VoiceMaster-Setup.exe"
 ```
 
 No admin rights needed. SmartScreen will warn you the publisher is unknown: **More info →
@@ -35,12 +35,13 @@ Run anyway**.
 **Linux** — paste in a terminal:
 
 ```bash
-curl -fL https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice%20Master-x64.AppImage -o ~/VoiceMaster.AppImage && chmod +x ~/VoiceMaster.AppImage && ~/VoiceMaster.AppImage
+curl -fL https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice.Master-x86_64.AppImage -o ~/VoiceMaster.AppImage && chmod +x ~/VoiceMaster.AppImage && ~/VoiceMaster.AppImage
 ```
 
-That is the portable build, nothing to install. Debian and Ubuntu users can take the `.deb`
-from the [releases page](https://github.com/aguara-guazu/voice-master/releases/latest) instead
-and install it with `sudo apt install ./Voice*.deb`.
+That is the portable build, nothing to install. Debian and Ubuntu users can take
+`Voice.Master-amd64.deb` from the
+[releases page](https://github.com/aguara-guazu/voice-master/releases/latest) instead and
+install it with `sudo apt install ./Voice.Master-amd64.deb`.
 
 **You also need [Claude Code](https://claude.com/claude-code) on your PATH.** The application
 starts `claude` in the master tab; without it, the tabs work but nobody administers them.

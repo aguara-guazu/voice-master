@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { Registry } from "./registry";
 import { prepareMasterSession, writeMcpConfig } from "./master-session";
 import { MasterNotifier } from "./notifier";
@@ -11,6 +11,15 @@ import type { VoiceState } from "./voice";
 import { SpeechController } from "./speech";
 import { startMcpServer } from "./mcp";
 import type { McpEndpoint } from "./mcp";
+import {
+  canSelfInstall,
+  cleanupLeftovers,
+  compareVersions,
+  downloadUpdate,
+  fetchLatestRelease,
+  installUpdate,
+  releasesPage,
+} from "./updater";
 import type { Terminal, TerminalEvent } from "./terminal";
 
 const MCP_PORT = Number(process.env.VOICE_MASTER_MCP_PORT ?? 7317);
@@ -29,6 +38,86 @@ let masterDir: string = os.homedir();
 let notifier: MasterNotifier | null = null;
 let voice: VoiceController | null = null;
 let speech: SpeechController | null = null;
+
+const BUNDLE_ID = "app.voice-master.local";
+
+/** Path of the running .app: the executable sits at Contents/MacOS inside it. */
+function bundlePath(): string {
+  return path.resolve(app.getPath("exe"), "..", "..", "..");
+}
+
+/**
+ * Offers the new version and installs it, returning true when the application is
+ * about to relaunch and startup should stop.
+ *
+ * Deliberately the first thing that happens, before any window, terminal or
+ * agent session exists. Everything in this application dies with the process, so
+ * an update that relaunches later would throw away the tabs the user had opened
+ * and the master session's context. At startup there is nothing to lose.
+ *
+ * Progress goes on the dock badge because there is no window yet to hang a
+ * progress bar on, and the download is around 680 MB — the models travel inside
+ * the image, so this is not a patch.
+ */
+async function runUpdateFlow(): Promise<boolean> {
+  if (!app.isPackaged) return false;
+
+  const bundle = bundlePath();
+  await cleanupLeftovers(bundle);
+
+  const release = await fetchLatestRelease();
+  if (!release) return false;
+  if (compareVersions(release.version, app.getVersion()) <= 0) return false;
+
+  const selfInstallable = canSelfInstall && release.downloadUrl !== null;
+  const { response } = await dialog.showMessageBox({
+    type: "info",
+    message: `Voice Master ${release.version} is available`,
+    detail: selfInstallable
+      ? `You are on ${app.getVersion()}. The download is about 680 MB: the speech models ` +
+        `travel inside the application, so this is a full build rather than a patch.\n\n` +
+        `Updating now restarts the application. Nothing is open yet, so nothing is lost.` +
+        (release.notes ? `\n\n${release.notes.slice(0, 500)}` : "")
+      : `You are on ${app.getVersion()}. This build cannot replace itself, so the download ` +
+        `has to be done by hand from the releases page.`,
+    buttons: selfInstallable ? ["Update now", "Later"] : ["Open releases page", "Later"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+
+  if (response !== 0) return false;
+
+  if (!selfInstallable) {
+    void shell.openExternal(releasesPage);
+    return false;
+  }
+
+  try {
+    app.dock?.setBadge("0%");
+    const dmg = await downloadUpdate(
+      release.downloadUrl as string,
+      (fraction) => app.dock?.setBadge(`${Math.round(fraction * 100)}%`),
+      AbortSignal.timeout(30 * 60 * 1000),
+    );
+    app.dock?.setBadge("···");
+    await installUpdate(dmg, bundle, BUNDLE_ID);
+    app.dock?.setBadge("");
+
+    app.relaunch();
+    app.exit(0);
+    return true;
+  } catch (error) {
+    app.dock?.setBadge("");
+    console.error("updater: the update failed", error);
+    dialog.showErrorBox(
+      "The update could not be installed",
+      `${error instanceof Error ? error.message : String(error)}\n\n` +
+        `Voice Master ${app.getVersion()} will start as usual. The build can be downloaded ` +
+        `by hand from ${releasesPage}.`,
+    );
+    return false;
+  }
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -221,6 +310,10 @@ function registerIpc(reg: Registry): void {
 }
 
 void app.whenReady().then(async () => {
+  // Before anything else exists: see runUpdateFlow. Returns true only when the
+  // process is already on its way out.
+  if (await runUpdateFlow()) return;
+
   const stateDir = app.getPath("userData");
 
   // In development __dirname points at dist/main and resources live two levels
@@ -272,7 +365,7 @@ void app.whenReady().then(async () => {
   // the renderer loads, and its session reads the MCP configuration at startup.
   try {
     mcp = await startMcpServer(registry, speech, MCP_PORT, token);
-    await writeMcpConfig(masterDir, mcp.url);
+    await writeMcpConfig(masterDir, mcp.url, mcp.turnEndUrl);
   } catch (error) {
     console.error("could not start the MCP server:", error);
   }

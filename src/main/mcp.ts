@@ -277,6 +277,7 @@ function buildServer(registry: Registry, speech: SpeechController): McpServer {
 export interface McpEndpoint {
   port: number;
   url: string;
+  turnEndUrl: string;
   close: () => Promise<void>;
 }
 
@@ -304,6 +305,13 @@ export async function startMcpServer(
   // not enough to use the server.
   app.all(`/mcp/${token}`, (req, res) => void node(req, res, req.body));
 
+  // Not an MCP tool: this is for the master session's Stop hook, which is a
+  // shell command and cannot call one. It answers whether the session spoke
+  // during the turn that is ending. Same secret in the path as the tools.
+  app.post(`/turn-end/${token}`, (_req, res) => {
+    res.json({ speak: speech.reportTurnEnd() });
+  });
+
   const server: Server = await new Promise((resolve, reject) => {
     const instance = app.listen(port, "127.0.0.1", () => resolve(instance));
     instance.on("error", reject);
@@ -315,6 +323,7 @@ export async function startMcpServer(
   return {
     port: bound,
     url: `http://127.0.0.1:${bound}/mcp/${token}`,
+    turnEndUrl: `http://127.0.0.1:${bound}/turn-end/${token}`,
     close: () =>
       new Promise((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

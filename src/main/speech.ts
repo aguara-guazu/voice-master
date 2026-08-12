@@ -54,6 +54,11 @@ export class SpeechController extends EventEmitter {
   private _speaking = false;
   private playbackAck: (() => void) | null = null;
 
+  // Backs the end-of-turn check. Nothing forces the master session to call
+  // `speak`, and a turn it forgets to speak is a turn the user may never notice.
+  private spokenSinceCheck = false;
+  private nudgedLastCheck = false;
+
   // One utterance at a time: two voices over each other are unintelligible, and
   // the microphone gate is a single flag. A request arriving mid-speech waits.
   private queue: Promise<unknown> = Promise.resolve();
@@ -100,6 +105,33 @@ export class SpeechController extends EventEmitter {
     this.playbackAck?.();
   }
 
+  /**
+   * Answers the master session's end-of-turn check: "ok" when it spoke since
+   * the previous end of turn, "missing" when it did not.
+   *
+   * The turn boundary is this call itself rather than a prompt event, so the
+   * check does not depend on how the turn was started — typed, spoken, or woken
+   * by the watcher.
+   *
+   * A "missing" answer is returned at most once in a row. If the session ends
+   * another turn without speaking after being told to, the check gives up and
+   * answers "ok": the alternative is a Stop hook that blocks the same turn
+   * forever, which is worse than a silent turn.
+   */
+  reportTurnEnd(): "ok" | "missing" {
+    if (this.spokenSinceCheck) {
+      this.spokenSinceCheck = false;
+      this.nudgedLastCheck = false;
+      return "ok";
+    }
+    if (this.nudgedLastCheck) {
+      this.nudgedLastCheck = false;
+      return "ok";
+    }
+    this.nudgedLastCheck = true;
+    return "missing";
+  }
+
   private async synthesise(text: string, speed: number): Promise<{ characters: number; seconds: number }> {
     await this.ensureLoaded();
     const tts = this.tts;
@@ -123,6 +155,7 @@ export class SpeechController extends EventEmitter {
       });
 
       const seconds = audio.samples.length / audio.sampleRate;
+      this.spokenSinceCheck = true;
       this.emit("end");
       await this.awaitPlayback(seconds);
       return { characters: text.length, seconds };

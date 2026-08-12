@@ -21,7 +21,8 @@ The applications are **not signed**, so each system asks for a confirmation the 
 curl -fL https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice.Master-arm64.dmg -o /tmp/VoiceMaster.dmg && open /tmp/VoiceMaster.dmg
 ```
 
-Drag **Voice Master** to Applications and open it.
+Drag **Voice Master** to Applications and open it. From then on it offers new versions on
+launch and installs them itself.
 
 **Windows** — paste in PowerShell:
 
@@ -81,6 +82,13 @@ it, turn it back on in System Settings → Privacy & Security → Microphone.
 machine, offline. The only thing that reaches the network is whatever Claude Code itself does.
 
 **What language does it speak?** Spanish, with an Argentinian voice.
+
+**How do updates work?** On macOS, it checks for a new release when it starts and asks before
+doing anything. Accepting downloads the build and replaces the application, then restarts —
+which is why the check happens at launch, before any tab is open: everything in this
+application dies with the process, so there is nothing to lose at that moment and a lot to lose
+later. Each update is a full build of around 680 MB, since the speech models are inside it. On
+Windows and Linux it points at the releases page instead.
 
 ## Building it yourself
 

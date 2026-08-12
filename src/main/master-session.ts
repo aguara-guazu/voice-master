@@ -44,7 +44,36 @@ export async function prepareMasterSession(stateDir: string, resourcesDir: strin
  * Must run before the master tab opens: the file is read when the session starts,
  * not during it.
  */
-export async function writeMcpConfig(masterDir: string, url: string): Promise<void> {
+// Fed to the session when it ends a turn without having spoken. A Stop hook can
+// only run a shell command, so the decision of whether to block comes from the
+// application over HTTP and this is the text that goes back to the model.
+const SILENT_TURN_REASON =
+  "You ended the turn without calling speak. The user may be listening rather than " +
+  "reading, so a silent turn is one they can miss entirely. Say the spoken version of " +
+  "what you just wrote — a few sentences, no paths or identifiers or symbols, numbers " +
+  "spelled out — and then you are done.";
+
+/**
+ * Builds the Stop hook that keeps the session from ending a turn in silence.
+ *
+ * The application answers the check; grep decides from its response whether to
+ * emit the blocking verdict. `|| true` keeps a failed request — server down,
+ * timeout — from turning into a hook error that would interrupt the session:
+ * losing the reminder is acceptable, breaking the turn is not.
+ */
+function silentTurnHook(turnEndUrl: string): string {
+  const verdict = JSON.stringify({ decision: "block", reason: SILENT_TURN_REASON });
+  return (
+    `curl -sS --max-time 5 -X POST '${turnEndUrl}' 2>/dev/null ` +
+    `| grep -q '"speak":"missing"' && printf '%s' ${JSON.stringify(verdict)} || true`
+  );
+}
+
+export async function writeMcpConfig(
+  masterDir: string,
+  url: string,
+  turnEndUrl: string,
+): Promise<void> {
   const config = {
     mcpServers: {
       "voice-master": {
@@ -57,11 +86,25 @@ export async function writeMcpConfig(masterDir: string, url: string): Promise<vo
   await writeFile(path.join(masterDir, ".mcp.json"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
 
   // Project permissions so the master session has the tools without manual
-  // approvals. They apply to this directory only: no other session inherits them.
+  // approvals, plus the Stop hook. Both apply to this directory only: no other
+  // session inherits them.
   const settings = {
     enableAllProjectMcpServers: true,
     permissions: {
       allow: ["mcp__voice-master"],
+    },
+    hooks: {
+      Stop: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: silentTurnHook(turnEndUrl),
+              timeout: 10,
+            },
+          ],
+        },
+      ],
     },
   };
 

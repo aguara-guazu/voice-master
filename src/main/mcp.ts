@@ -4,6 +4,7 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod";
 import type { Registry } from "./registry";
+import type { SpeechController } from "./speech";
 
 // The return type is left to inference: the SDK's result union discriminates on
 // the "text" literal, which a hand-written annotation would widen to string.
@@ -12,7 +13,7 @@ function text(value: unknown) {
   return { content: [{ type: "text" as const, text: body }] };
 }
 
-function buildServer(registry: Registry): McpServer {
+function buildServer(registry: Registry, speech: SpeechController): McpServer {
   const server = new McpServer({ name: "voice-master", version: "0.1.0" });
 
   server.registerTool(
@@ -235,6 +236,41 @@ function buildServer(registry: Registry): McpServer {
     },
   );
 
+  server.registerTool(
+    "speak",
+    {
+      description:
+        "Says something out loud through the application's speakers, in Spanish. This is how the " +
+        "user hears you: the terminal is what they read, this is what they hear.\n\n" +
+        "The text is spoken exactly as given — nothing is rewritten, expanded or cleaned up — so " +
+        "it has to be written to be heard, not read. It is not your terminal answer passed along: " +
+        "it is a shorter spoken version of it, and writing it is your job.\n\n" +
+        "Leave out everything that only works in writing: file paths, line references, " +
+        "identifiers, function calls, flags, URLs, backticks, bullets and headings. Say what they " +
+        "mean instead. Write numbers as they are pronounced ('cero coma nueve', 'dos mil " +
+        "veintiséis'), and expand or drop abbreviations.\n\n" +
+        "The microphone is muted while this plays, so the user cannot interrupt and nothing they " +
+        "say meanwhile is heard. Keep it to a few sentences.\n\n" +
+        "The call returns once the audio has finished playing.",
+      inputSchema: z.object({
+        text: z
+          .string()
+          .min(1)
+          .describe("What to say, written to be heard: no symbols, numbers spelled out"),
+        speed: z
+          .number()
+          .min(0.5)
+          .max(2)
+          .optional()
+          .describe("Speaking rate; below 1 is slower. Omit it: the default is set by ear"),
+      }),
+    },
+    async ({ text: payload, speed }) => {
+      const result = await speech.speak(payload, speed);
+      return text({ spoken: true, characters: result.characters, seconds: Number(result.seconds.toFixed(2)) });
+    },
+  );
+
   return server;
 }
 
@@ -248,14 +284,16 @@ export interface McpEndpoint {
  * Publishes the MCP server over HTTP on loopback.
  *
  * The handler takes a factory: one McpServer is built per request, so the tools
- * close over the shared registry rather than over per-instance state.
+ * close over the shared registry and speech controller rather than over
+ * per-instance state.
  */
 export async function startMcpServer(
   registry: Registry,
+  speech: SpeechController,
   port: number,
   token: string,
 ): Promise<McpEndpoint> {
-  const handler = createMcpHandler(() => buildServer(registry));
+  const handler = createMcpHandler(() => buildServer(registry, speech));
   const node = toNodeHandler(handler);
 
   const app = createMcpExpressApp();

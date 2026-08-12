@@ -320,8 +320,9 @@ body.dragging {
   color: #f7768e;
 }
 
-/* Conversation is live but paused for the master's reply, not listening. */
-#layout-controls button.waiting {
+/* The master session is speaking: the microphone is gated shut meanwhile, so
+   listening is live but deaf until it finishes. */
+#layout-controls button.speaking {
   border-color: #e0af68;
   color: #e0af68;
 }

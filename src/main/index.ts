@@ -8,6 +8,7 @@ import { prepareMasterSession, writeMcpConfig } from "./master-session";
 import { MasterNotifier } from "./notifier";
 import { VoiceController } from "./voice";
 import type { VoiceState } from "./voice";
+import { SpeechController } from "./speech";
 import { startMcpServer } from "./mcp";
 import type { McpEndpoint } from "./mcp";
 import type { Terminal, TerminalEvent } from "./terminal";
@@ -27,6 +28,7 @@ let mcp: McpEndpoint | null = null;
 let masterDir: string = os.homedir();
 let notifier: MasterNotifier | null = null;
 let voice: VoiceController | null = null;
+let speech: SpeechController | null = null;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -79,6 +81,26 @@ function wireVoice(controller: VoiceController): void {
   controller.on("state", (state: VoiceState) => {
     console.log(`voice: state -> ${state}`); // TEMPORARY, see voice.ts's logAudioLevel note
     send("voice:state", state);
+  });
+}
+
+/**
+ * Audio synthesised in this process has to be played where the web APIs are, so
+ * every chunk crosses to the renderer as it comes out of the model.
+ *
+ * The microphone is gated on "speaking" rather than on the individual chunks:
+ * it closes when synthesis starts and reopens only once the renderer reports
+ * the sound has stopped. Anything narrower would leave the tail of an utterance
+ * being captured while the gate is already open.
+ */
+function wireSpeech(controller: SpeechController, listening: VoiceController): void {
+  controller.on("chunk", (samples: Float32Array, sampleRate: number) => {
+    send("speech:chunk", samples.buffer, sampleRate);
+  });
+  controller.on("end", () => send("speech:end"));
+  controller.on("speaking", (speaking: boolean) => {
+    listening.setMuted(speaking);
+    send("speech:speaking", speaking);
   });
 }
 
@@ -190,6 +212,12 @@ function registerIpc(reg: Registry): void {
   ipcMain.on("voice:audio-chunk", (_event, buffer: ArrayBuffer) => {
     voice?.pushAudio(new Int16Array(buffer));
   });
+
+  // The renderer owns the audio clock, so this is the only accurate signal that
+  // the speakers have gone quiet and the microphone can open again.
+  ipcMain.on("speech:finished", () => {
+    speech?.notifyPlaybackFinished();
+  });
 }
 
 void app.whenReady().then(async () => {
@@ -217,11 +245,15 @@ void app.whenReady().then(async () => {
     console.error("could not create the voice channel file:", error);
   }
 
-  voice = new VoiceController(voiceLog, path.join(__dirname, "..", "..", "resources", "voice"));
+  const modelsDir = path.join(__dirname, "..", "..", "resources", "voice");
+  voice = new VoiceController(voiceLog, modelsDir);
   voice.preload();
+  speech = new SpeechController(modelsDir);
+  speech.preload();
   registerIpc(registry);
   wireRegistry(registry);
   wireVoice(voice);
+  wireSpeech(speech, voice);
   armVoiceAutostart(registry);
 
   // Access secret for the server, new on every start. It is only written to the
@@ -232,7 +264,7 @@ void app.whenReady().then(async () => {
   // The server comes up before the window opens: the master tab is created when
   // the renderer loads, and its session reads the MCP configuration at startup.
   try {
-    mcp = await startMcpServer(registry, MCP_PORT, token);
+    mcp = await startMcpServer(registry, speech, MCP_PORT, token);
     await writeMcpConfig(masterDir, mcp.url);
   } catch (error) {
     console.error("could not start the MCP server:", error);

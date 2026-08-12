@@ -65,6 +65,34 @@ const api = {
     ipcRenderer.on("voice:autostart", () => handler());
   },
 
+  // Synthesised audio arrives in sentence-aligned chunks as the model produces
+  // them, so playback starts before the whole utterance exists.
+  // Float32Array<ArrayBuffer> rather than the default ArrayBufferLike: the
+  // renderer feeds these straight into an AudioBuffer, which rejects a buffer
+  // that might be shared.
+  onSpeechChunk: (
+    handler: (samples: Float32Array<ArrayBuffer>, sampleRate: number) => void,
+  ): void => {
+    ipcRenderer.on("speech:chunk", (_e: IpcRendererEvent, buffer: ArrayBuffer, sampleRate: number) =>
+      handler(new Float32Array(buffer), sampleRate),
+    );
+  },
+
+  // No more chunks are coming: whatever is already scheduled is the whole
+  // utterance. Playback still has to drain before the microphone reopens.
+  onSpeechEnd: (handler: () => void): void => {
+    ipcRenderer.on("speech:end", () => handler());
+  },
+
+  onSpeechSpeaking: (handler: (speaking: boolean) => void): void => {
+    ipcRenderer.on("speech:speaking", (_e: IpcRendererEvent, speaking: boolean) =>
+      handler(speaking),
+    );
+  },
+
+  // Reports the speakers have gone quiet, which is what reopens the microphone.
+  notifySpeechFinished: (): void => ipcRenderer.send("speech:finished"),
+
   onData: (handler: (id: string, chunk: string) => void): void => {
     ipcRenderer.on("terminal:data", (_e: IpcRendererEvent, id: string, chunk: string) =>
       handler(id, chunk),

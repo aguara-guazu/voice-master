@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { VoiceMasterApi } from "../preload/index";
 import { startVoiceCapture, stopVoiceCapture } from "./voice-capture";
+import { startSpeechPlayback } from "./speech-playback";
 
 declare global {
   interface Window {
@@ -220,6 +221,15 @@ window.vm.onVoiceState((state) => {
 // nobody reads yet.
 window.vm.onVoiceAutostart(() => {
   if (!voiceEl.classList.contains("on")) void setVoiceOn(true);
+});
+
+// Playback of the master session's own voice. Wired unconditionally: it costs
+// nothing until a chunk arrives, and it is independent of whether the
+// microphone is on — the session can speak to a user who is typing.
+startSpeechPlayback();
+
+window.vm.onSpeechSpeaking((speaking) => {
+  voiceEl.classList.toggle("speaking", speaking);
 });
 
 orientationEl.addEventListener("click", () => {

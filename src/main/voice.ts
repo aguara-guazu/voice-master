@@ -51,6 +51,7 @@ export class VoiceController extends EventEmitter {
   private loadingPromise: Promise<void> | null = null;
 
   private _enabled = false;
+  private _muted = false;
   private _state: VoiceState = "idle";
   private speechStartedAt = 0;
   private consecutiveFailures = 0;
@@ -103,9 +104,30 @@ export class VoiceController extends EventEmitter {
     return this._enabled;
   }
 
+  /**
+   * Gates the microphone while the application is speaking through its own
+   * speakers. Without this the synthesised voice is captured, segmented by the
+   * VAD, transcribed and published to the voice channel, and the master session
+   * wakes up to its own words as though the user had said them.
+   *
+   * The capture stream is left running: dropping the samples here costs nothing
+   * and avoids tearing down and reacquiring the device on every utterance. The
+   * trade-off taken is that speech cannot be interrupted by talking over it —
+   * nothing is listening while it talks.
+   *
+   * Unmuting restarts the segment: whatever the VAD had accumulated from the
+   * tail of the played audio is discarded rather than prepended to the user's
+   * next utterance.
+   */
+  setMuted(value: boolean): void {
+    if (this._muted === value) return;
+    this._muted = value;
+    if (!value && this._enabled && this._state === "recording") this.beginRecording();
+  }
+
   /** Feeds a chunk of mono 16 kHz PCM16 samples captured in the renderer. */
   pushAudio(pcm16: Int16Array): void {
-    if (!this._enabled || !this.vad || !this.vadBuffer) return;
+    if (!this._enabled || this._muted || !this.vad || !this.vadBuffer) return;
 
     logAudioLevel(pcm16);
 

@@ -7,8 +7,8 @@ name: Release
 # source by electron-rebuild, and sherpa-onnx and whisper resolve a prebuilt
 # binary per platform and architecture. Cross-building would package native
 # code for the wrong machine, so each artifact comes off a runner of its own
-# architecture. That is why macOS takes two runners and why win/linux arm64
-# are not built.
+# architecture. Only the architectures listed here are built: macOS on Intel
+# and win/linux on arm64 are not.
 #
 # No architecture is declared anywhere: the build targets in package.json list
 # no arch and no --arch flag is passed, so each runner produces its own. An
@@ -28,15 +28,6 @@ jobs:
         include:
           - os: macos-latest
             name: mac-arm64
-            args: --mac
-          # macos-15-intel, not macos-13: the macOS 13 images were fully
-          # retired on 2025-12-08, and a job requesting them sits queued
-          # forever instead of failing. This label is the migration path for
-          # x86_64 and is planned as the last Intel image, supported until
-          # August 2027.
-          # https://github.blog/changelog/2025-09-19-github-actions-macos-13-runner-image-is-closing-down/
-          - os: macos-15-intel
-            name: mac-x64
             args: --mac
           - os: windows-latest
             name: win-x64

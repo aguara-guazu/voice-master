@@ -15,10 +15,10 @@ there is nothing to download afterwards.
 
 The applications are **not signed**, so each system asks for a confirmation the first time.
 
-**macOS** (Apple Silicon or Intel) — paste in a terminal:
+**macOS** (Apple Silicon — Intel Macs are not supported) — paste in a terminal:
 
 ```bash
-curl -fL https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice%20Master-$(uname -m | sed s/x86_64/x64/).dmg -o /tmp/VoiceMaster.dmg && open /tmp/VoiceMaster.dmg
+curl -fL https://github.com/aguara-guazu/voice-master/releases/latest/download/Voice%20Master-arm64.dmg -o /tmp/VoiceMaster.dmg && open /tmp/VoiceMaster.dmg
 ```
 
 Drag **Voice Master** to Applications and open it.
@@ -45,9 +45,9 @@ and install it with `sudo apt install ./Voice*.deb`.
 **You also need [Claude Code](https://claude.com/claude-code) on your PATH.** The application
 starts `claude` in the master tab; without it, the tabs work but nobody administers them.
 
-Only macOS on Apple Silicon has been used for real. Windows and Linux builds are produced by
-the same pipeline but nobody has run them yet, and the shell integration that detects when a
-command starts and ends is written for zsh.
+Only macOS on Apple Silicon has been used for real. Windows and Linux builds come off the same
+pipeline but nobody has run them yet, and the shell integration that detects when a command
+starts and ends is written for zsh.
 
 ## How it works
 
@@ -115,9 +115,9 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-`.github/workflows/release.yml` builds macOS (arm64 and x64), Windows x64 and Linux x64, each
-on its own runner, downloads the models, and publishes every artifact to the release for that
-tag. Windows and Linux on arm64 are not built.
+`.github/workflows/release.yml` builds macOS arm64, Windows x64 and Linux x64, each on its own
+runner, downloads the models, and publishes every artifact to the release for that tag. macOS
+on Intel and Windows/Linux on arm64 are not built.
 
 ## Licence
 

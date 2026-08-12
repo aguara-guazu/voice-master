@@ -11,7 +11,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, rename, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -88,7 +87,11 @@ async function fetchModel(model) {
   }
 
   console.log(`↓ ${model.name}`);
-  const work = await mkdtemp(path.join(tmpdir(), "voice-master-models-"));
+  // Staged inside the target directory rather than the system temp: a download
+  // is only moved into place once it is complete, and on Windows the runner's
+  // temp lives on C: while the checkout is on D:, where a rename across the two
+  // fails with EXDEV.
+  const work = await mkdtemp(path.join(target, ".fetching-"));
   try {
     if (model.archive) {
       const archive = path.join(work, "model.tar.bz2");
